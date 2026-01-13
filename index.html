@@ -1,0 +1,2132 @@
+<html lang="en" __gchrome_remoteframetoken="46c35eb86feb11f688023525ff223d50"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz Generator &amp; Player</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+            transition: background 0.3s ease;
+        }
+
+        /* --- LANDING / UPLOAD PAGE STYLES --- */
+        #landing-page {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .upload-card {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            max-width: 500px;
+            width: 100%;
+            backdrop-filter: blur(10px);
+            animation: fadeIn 0.8s ease-out;
+            transition: all 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .upload-card h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .upload-card p {
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .drop-zone {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 40px 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #f8f9fa;
+            margin-bottom: 20px;
+        }
+
+        .drop-zone:hover, .drop-zone.dragover {
+            background: #e3f2fd;
+            border-color: #2196f3;
+            transform: scale(1.02);
+        }
+
+        .drop-zone-text {
+            font-size: 16px;
+            color: #555;
+            pointer-events: none;
+        }
+
+        .drop-zone-icon {
+            font-size: 40px;
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .loader {
+            display: none;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error-msg {
+            color: #f44336;
+            margin-top: 10px;
+            font-weight: 500;
+            display: none;
+        }
+
+        /* --- SUCCESS / ACTION OPTIONS --- */
+        #action-area {
+            display: none; /* Hidden until file parsed */
+            margin-top: 20px;
+        }
+        
+        .success-text {
+            color: #2ecc71;
+            font-weight: 600;
+            margin-bottom: 20px;
+            font-size: 18px;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .action-btn {
+            flex: 1;
+            min-width: 140px;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-play {
+            background: #3f51b5;
+            color: white;
+            box-shadow: 0 4px 15px rgba(63, 81, 181, 0.3);
+        }
+
+        .btn-download {
+            background: #27ae60;
+            color: white;
+            box-shadow: 0 4px 15px rgba(39, 174, 96, 0.3);
+        }
+
+        .action-btn:hover {
+            transform: translateY(-2px);
+            opacity: 0.95;
+        }
+
+        .btn-play:hover { box-shadow: 0 6px 20px rgba(63, 81, 181, 0.4); }
+        .btn-download:hover { box-shadow: 0 6px 20px rgba(39, 174, 96, 0.4); }
+
+
+        /* --- QUIZ APP STYLES (From Original App) --- */
+        #quiz-app {
+            display: none; /* Hidden until activated */
+            width: 100%;
+        }
+
+        /* Dark Mode */
+        body.dark-mode {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #e0e0e0;
+        }
+        body.dark-mode .header,
+        body.dark-mode .quiz-section,
+        body.dark-mode .controls-panel,
+        body.dark-mode .question-grid {
+            background: #2c2c54;
+            color: #e0e0e0;
+        }
+        body.dark-mode .title,
+        body.dark-mode .controls-title,
+        body.dark-mode .grid-title,
+        body.dark-mode .jump-to-question label,
+        body.dark-mode .question-text {
+            color: #e0e0e0 !important;
+        }
+        body.dark-mode .answer-option {
+            background: #40407a;
+            border-color: #706fd3;
+            color: #e0e0e0;
+        }
+        body.dark-mode .answer-option:hover:not(.disabled) {
+            background: #5352ed;
+            border-color: #3742fa;
+        }
+        body.dark-mode .option-label {
+            background: #706fd3 !important;
+            color: #ffffff !important;
+        }
+        body.dark-mode .answer-option.correct {
+            background: #4caf50 !important;
+            color: #ffffff !important;
+            border-color: #388e3c !important;
+        }
+        body.dark-mode .answer-option.incorrect {
+            background: #f44336 !important;
+            color: #ffffff !important;
+            border-color: #d32f2f !important;
+        }
+        body.dark-mode .answer-option.correct .option-label,
+        body.dark-mode .answer-option.incorrect .option-label {
+            background: rgba(255, 255, 255, 0.3) !important;
+            color: #ffffff !important;
+        }
+        body.dark-mode .answer-option.correct-answer-mode {
+            background: #4caf50 !important;
+            color: #ffffff !important;
+            border: 2px solid #388e3c !important;
+            font-weight: 600;
+        }
+        body.dark-mode .answer-option.other-answer-mode {
+            background: #40407a !important;
+            color: #b0b0b0 !important;
+            border: 1px solid #706fd3 !important;
+            opacity: 0.7;
+        }
+        body.dark-mode .grid-item {
+            background: #40407a;
+            border-color: #706fd3;
+            color: #e0e0e0;
+        }
+        body.dark-mode .grid-item:hover {
+            background: #5352ed;
+            border-color: #3742fa;
+        }
+
+        /* Exam Mode Body Styles */
+        body.exam-mode {
+            background: #f5f5f5;
+            color: #333;
+        }
+        body.exam-mode.dark-mode {
+            background: #1a1a2e;
+            color: #e0e0e0;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            transition: all 0.3s ease;
+        }
+        body.exam-mode .container {
+            max-width: 100%;
+            padding: 0;
+            margin: 0;
+        }
+
+        .header {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            transition: all 0.3s ease;
+        }
+        body.exam-mode .header {
+            background: #e8e8e8;
+            border-radius: 0;
+            margin-bottom: 0;
+            padding: 15px 20px;
+            box-shadow: none;
+            border-bottom: 1px solid #ddd;
+        }
+        body.exam-mode.dark-mode .header {
+            background: #2c2c54;
+            border-bottom: 1px solid #40407a;
+        }
+
+        .title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #2c3e50;
+            transition: all 0.3s ease;
+        }
+        body.exam-mode .title {
+            font-size: 16px;
+            color: #333;
+            font-weight: 500;
+        }
+        body.exam-mode.dark-mode .title {
+            color: #e0e0e0;
+        }
+
+        .timer-section {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+            transition: all 0.3s ease;
+        }
+        body.exam-mode .timer-section {
+            gap: 20px;
+        }
+
+        .timer-settings {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #f8f9fa;
+            padding: 8px 15px;
+            border-radius: 20px;
+            border: 2px solid #e9ecef;
+            transition: all 0.3s ease;
+        }
+        .timer-settings.hidden {
+            opacity: 0;
+            transform: scale(0.8);
+            pointer-events: none;
+            height: 0;
+            padding: 0;
+            margin: 0;
+            overflow: hidden;
+        }
+        body.exam-mode .timer-settings {
+            display: flex;
+        }
+
+        .question-shuffle-settings {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            background: #fff3e0;
+            padding: 8px 15px;
+            border-radius: 20px;
+            border: 2px solid #ff9800;
+            transition: all 0.3s ease;
+        }
+        .question-shuffle-settings.hidden {
+            opacity: 0;
+            transform: scale(0.8);
+            pointer-events: none;
+            height: 0;
+            padding: 0;
+            margin: 0;
+            overflow: hidden;
+        }
+        body.exam-mode .question-shuffle-settings {
+            display: flex;
+        }
+
+        .question-count-settings {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            background: #e3f2fd;
+            padding: 8px 15px;
+            border-radius: 20px;
+            border: 2px solid #2196f3;
+            transition: all 0.3s ease;
+        }
+        .question-count-settings.hidden {
+            opacity: 0;
+            transform: scale(0.8);
+            pointer-events: none;
+            height: 0;
+            padding: 0;
+            margin: 0;
+            overflow: hidden;
+        }
+        body.exam-mode .question-count-settings {
+            display: flex;
+        }
+
+        .timer-input, .count-input {
+            width: 60px;
+            padding: 5px 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .timer-label, .count-label, .shuffle-label {
+            font-size: 12px;
+            color: #666;
+            font-weight: 500;
+        }
+
+        .timer-start-btn, .count-reset-btn, .shuffle-toggle-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: background 0.3s;
+        }
+        .timer-start-btn:hover, .count-reset-btn:hover, .shuffle-toggle-btn:hover {
+            background: #218838;
+        }
+
+        .count-reset-btn { background: #2196f3; }
+        .count-reset-btn:hover { background: #1976d2; }
+
+        .shuffle-toggle-btn { background: #ff9800; }
+        .shuffle-toggle-btn:hover { background: #f57c00; }
+        .shuffle-toggle-btn.active { background: #4caf50; }
+        .shuffle-toggle-btn.active:hover { background: #388e3c; }
+
+        .timer {
+            background: #ffebee;
+            border: 2px solid #f44336;
+            border-radius: 25px;
+            padding: 8px 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #d32f2f;
+            font-weight: 600;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        body.exam-mode .timer {
+            background: #ffcdd2;
+            border: 1px solid #f44336;
+            border-radius: 8px;
+            padding: 8px 15px;
+            color: #d32f2f;
+            font-size: 14px;
+        }
+        .timer.active {
+            background: #e8f5e8;
+            border-color: #4caf50;
+            color: #2e7d32;
+        }
+        body.exam-mode .timer.active {
+            background: #ffcdd2;
+            border-color: #f44336;
+            color: #d32f2f;
+        }
+
+        .question-shuffle-display {
+            background: #fff3e0;
+            border: 1px solid #ff9800;
+            border-radius: 8px;
+            padding: 8px 15px;
+            display: none;
+            align-items: center;
+            gap: 8px;
+            color: #e65100;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        body.exam-mode .question-shuffle-display { display: flex; }
+        .question-shuffle-display.active {
+            background: #e8f5e8;
+            border-color: #4caf50;
+            color: #2e7d32;
+        }
+
+        .question-count-display {
+            background: #e3f2fd;
+            border: 1px solid #2196f3;
+            border-radius: 8px;
+            padding: 8px 15px;
+            display: none;
+            align-items: center;
+            gap: 8px;
+            color: #1565c0;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        body.exam-mode .question-count-display { display: flex; }
+
+        .timer-reset-btn, .shuffle-reset-btn, .count-reset-display-btn {
+            background: #ff5722;
+            color: white;
+            border: none;
+            border-radius: 15px;
+            padding: 4px 12px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 500;
+            margin-left: 10px;
+            transition: all 0.3s ease;
+            opacity: 0;
+            transform: scale(0.8);
+        }
+        .timer-reset-btn.visible, .shuffle-reset-btn.visible, .count-reset-display-btn.visible {
+            opacity: 1;
+            transform: scale(1);
+        }
+        .timer-reset-btn:hover, .shuffle-reset-btn:hover, .count-reset-display-btn:hover {
+            background: #e64a19;
+        }
+        .count-reset-display-btn { background: #2196f3; }
+        .count-reset-display-btn:hover { background: #1976d2; }
+
+        .timer-expired-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        .timer-expired-overlay.visible { opacity: 1; pointer-events: all; }
+        .timer-expired-message {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .result-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1001;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        .result-overlay.visible { opacity: 1; pointer-events: all; }
+        .result-message {
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 90%;
+        }
+        .result-message.passed { border-left: 5px solid #4caf50; }
+        .result-message.failed { border-left: 5px solid #f44336; }
+        .result-title { font-size: 24px; font-weight: 700; margin-bottom: 20px; }
+        .result-title.passed { color: #4caf50; }
+        .result-title.failed { color: #f44336; }
+        .result-stats { font-size: 16px; line-height: 1.6; margin-bottom: 20px; color: #333; }
+
+        .exit-btn {
+            background: #37474f;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 500;
+            transition: background 0.3s;
+        }
+        .exit-btn:hover { background: #455a64; }
+        body.exam-mode .exit-btn {
+            background: #2c3e50;
+            padding: 8px 15px;
+            font-size: 14px;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 20px;
+            transition: all 0.3s ease;
+        }
+        body.exam-mode .main-content {
+            grid-template-columns: 1fr;
+            gap: 0;
+            background: #f5f5f5;
+        }
+        body.exam-mode.dark-mode .main-content { background: #1a1a2e; }
+
+        .quiz-section {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            transition: opacity 0.3s ease, all 0.3s ease;
+        }
+        body.exam-mode .quiz-section {
+            background: #f5f5f5;
+            border-radius: 0;
+            padding: 20px;
+            box-shadow: none;
+            margin-bottom: 0;
+        }
+        body.exam-mode.dark-mode .quiz-section { background: #1a1a2e; }
+        .quiz-section.timer-expired { opacity: 0.6; pointer-events: none; }
+
+        .question-header {
+            background: #3f51b5;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin-bottom: 25px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.3s ease;
+        }
+        body.exam-mode .question-header {
+            background: #0D0A69;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            padding: 12px 20px;
+            justify-content: space-between;
+        }
+
+        .question-number {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        body.exam-mode .question-number {
+            background: #34495e;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 14px;
+            min-width: 40px;
+            text-align: center;
+        }
+
+        .question-counter {
+            background: #4caf50;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: 600;
+            display: none;
+        }
+        body.exam-mode .question-counter { display: inline-block; }
+
+        .question-text {
+            font-size: 18px;
+            line-height: 1.6;
+            margin-bottom: 25px;
+            color: #2c3e50;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        body.exam-mode .question-text {
+            font-size: 16px;
+            margin-bottom: 20px;
+            color: #333;
+            line-height: 1.5;
+        }
+        body.exam-mode.dark-mode .question-text { color: #e0e0e0; }
+
+        .answers { space-y: 12px; }
+
+        .answer-option {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            padding: 15px 20px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+        body.exam-mode .answer-option {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 0;
+            padding: 12px 15px;
+            margin-bottom: 8px;
+            align-items: center;
+        }
+        body.exam-mode.dark-mode .answer-option {
+            background: #40407a;
+            border-color: #706fd3;
+            color: #e0e0e0;
+        }
+        .answer-option:hover:not(.disabled) {
+            background: #e3f2fd;
+            border-color: #2196f3;
+            transform: translateY(-2px);
+        }
+        body.exam-mode .answer-option:hover:not(.disabled) {
+            background: #e8f4fd;
+            border-color: #2196f3;
+            transform: none;
+        }
+        body.exam-mode.dark-mode .answer-option:hover:not(.disabled) {
+            background: #5352ed;
+            border-color: #3742fa;
+        }
+        .answer-option.selected {
+            background: #2196f3;
+            color: white;
+            border-color: #1976d2;
+        }
+        body.exam-mode .answer-option.selected {
+            background: #2196f3;
+            color: white;
+            border-color: #1976d2;
+        }
+        .answer-option.correct {
+            background: #4caf50;
+            color: white;
+            border-color: #388e3c;
+        }
+        .answer-option.incorrect {
+            background: #f44336;
+            color: white;
+            border-color: #d32f2f;
+        }
+        .answer-option.correct-answer-mode {
+            background: #e8f5e8;
+            color: #2e7d32;
+            border: 2px solid #4caf50;
+            font-weight: 600;
+        }
+        .answer-option.other-answer-mode {
+            background: #f5f5f5;
+            color: #757575;
+            border: 1px solid #e0e0e0;
+            opacity: 0.7;
+        }
+        .answer-option.disabled { cursor: not-allowed; }
+        .answer-option.timer-expired { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+
+        .option-label {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: #e0e0e0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 14px;
+            flex-shrink: 0;
+            transition: all 0.3s ease;
+            color: #333;
+        }
+        body.exam-mode .option-label {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 2px solid #ccc;
+            background: white;
+            font-size: 0;
+            position: relative;
+        }
+        body.exam-mode .answer-option.selected .option-label {
+            background: #2196f3;
+            border-color: #2196f3;
+        }
+        body.exam-mode .answer-option.selected .option-label::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: white;
+        }
+        .answer-option.selected .option-label,
+        .answer-option.correct .option-label,
+        .answer-option.incorrect .option-label {
+            background: rgba(255, 255, 255, 0.3);
+            color: white;
+        }
+
+        .option-text { flex: 1; line-height: 1.4; }
+
+        .navigation {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+            transition: all 0.3s ease;
+        }
+        body.exam-mode .navigation {
+            justify-content: flex-start;
+            gap: 15px;
+            border-top: none;
+            margin-top: 20px;
+            padding-top: 0;
+        }
+
+        .nav-btn {
+            background: #3f51b5;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background 0.3s;
+        }
+        body.exam-mode .nav-btn {
+            background: #2196f3;
+            border-radius: 4px;
+            padding: 8px 16px;
+            font-size: 14px;
+        }
+        .nav-btn:hover { background: #303f9f; }
+        body.exam-mode .nav-btn:hover { background: #1976d2; }
+        .nav-btn:disabled { background: #ccc; cursor: not-allowed; }
+
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            transition: all 0.3s ease;
+        }
+        body.exam-mode .sidebar { display: none; }
+
+        .controls-panel {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .controls-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #2c3e50;
+        }
+
+        .mode-toggles { display: flex; flex-direction: column; gap: 10px; }
+
+        .toggle-btn {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 10px 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+            font-weight: 500;
+        }
+        .toggle-btn:hover { background: #e9ecef; }
+        .toggle-btn.active {
+            background: #3f51b5;
+            color: white;
+            border-color: #3f51b5;
+        }
+
+        .jump-to-question {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #e9ecef;
+        }
+        .jump-to-question label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #2c3e50;
+        }
+
+        .jump-input-group { display: flex; gap: 8px; }
+
+        .jump-input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .jump-btn {
+            background: #2196f3;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.3s;
+        }
+        .jump-btn:hover { background: #1976d2; }
+
+        .question-grid {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .grid-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #2c3e50;
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+            gap: 8px;
+        }
+
+        .grid-item {
+            width: 40px;
+            height: 40px;
+            border: 2px solid #e9ecef;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 12px;
+            transition: all 0.3s;
+            background: white;
+        }
+        .grid-item:hover { background: #e3f2fd; border-color: #2196f3; }
+        .grid-item.current { background: #3f51b5; color: white; border-color: #3f51b5; }
+        .grid-item.answered { background: #4caf50; color: white; border-color: #4caf50; }
+        
+        /* NEW: Correct/Incorrect grid items */
+        .grid-item.correct { background: #4caf50; color: white; border-color: #4caf50; }
+        .grid-item.incorrect { background: #f44336; color: white; border-color: #f44336; }
+
+        .grid-item.unanswered { background: #ff9800; color: white; border-color: #ff9800; }
+
+        .exam-question-grid { display: none; margin-top: 20px; }
+        body.exam-mode .exam-question-grid { display: block; }
+
+        .exam-grid-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            background: #0D0A69;
+            padding: 10px 15px;
+            border-radius: 6px;
+            color: white;
+        }
+
+        .exam-grid-title { font-size: 14px; font-weight: 600; color: white; }
+
+        .exam-grid-toggle {
+            background: #34495e;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background 0.3s;
+        }
+        .exam-grid-toggle:hover { background: #4a6741; }
+
+        .exam-grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(35px, 1fr));
+            gap: 6px;
+            max-height: 200px;
+            overflow-y: auto;
+            transition: all 0.3s ease;
+            background: white;
+            padding: 15px;
+            border-radius: 0 0 6px 6px;
+        }
+        .exam-grid-container.collapsed { max-height: 0; overflow: hidden; opacity: 0; padding: 0; }
+
+        .exam-grid-item {
+            width: 35px;
+            height: 35px;
+            border: 1px solid #c0392b;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 11px;
+            transition: all 0.3s;
+            background: #e74c3c;
+            color: white;
+        }
+        .exam-grid-item:hover { background: #c0392b; }
+        .exam-grid-item.current { background: #3498db; border-color: #2980b9; }
+        .exam-grid-item.answered { background: #e74c3c; border-color: #c0392b; }
+        .exam-grid-item.unanswered { background: #e74c3c; border-color: #c0392b; }
+
+        .mobile-question-dropdown {
+            display: none;
+            margin-top: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        }
+        body.exam-mode .mobile-question-dropdown { display: none !important; }
+
+        .dropdown-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            cursor: pointer;
+        }
+
+        .dropdown-title { font-size: 16px; font-weight: 600; color: #2c3e50; }
+        .dropdown-arrow { font-size: 18px; transition: transform 0.3s ease; }
+        .dropdown-arrow.expanded { transform: rotate(180deg); }
+
+        .dropdown-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        /* FIXED: Scrolling for mobile dropdown */
+        .dropdown-content.expanded {
+            max-height: 300px;
+            overflow-y: auto;
+            padding-bottom: 10px;
+        }
+
+        /* Mobile Responsiveness */
+        @media (max-width: 768px) {
+            .container { padding: 10px; }
+            .main-content { grid-template-columns: 1fr; gap: 15px; }
+            .header { flex-direction: column; gap: 15px; text-align: center; }
+            .timer-section { justify-content: center; flex-wrap: wrap; }
+            .quiz-section { padding: 20px; }
+            .question-text { font-size: 16px; }
+            .answer-option { padding: 12px 15px; gap: 10px; }
+            .option-label { width: 25px; height: 25px; font-size: 12px; }
+            .navigation { flex-direction: column; gap: 10px; }
+            .nav-btn { width: 100%; padding: 12px; }
+            .sidebar { order: -1; }
+            .controls-panel, .question-grid { padding: 15px; }
+            .grid-container { grid-template-columns: repeat(auto-fill, minmax(35px, 1fr)); gap: 6px; }
+            .grid-item { width: 35px; height: 35px; font-size: 11px; }
+            .question-grid { display: none; }
+            .mobile-question-dropdown { display: block; }
+            body.exam-mode .mobile-question-dropdown { display: none !important; }
+            
+            /* Exam Mode Mobile */
+            body.exam-mode .container { padding: 0; }
+            body.exam-mode .header { padding: 10px 15px; flex-direction: row; justify-content: space-between; }
+            body.exam-mode .timer-section { gap: 10px; }
+            body.exam-mode .quiz-section { padding: 15px; }
+            body.exam-mode .question-text { font-size: 14px; margin-bottom: 15px; }
+            body.exam-mode .answer-option { padding: 10px 12px; margin-bottom: 6px; }
+            body.exam-mode .option-label { width: 18px; height: 18px; }
+            body.exam-mode .navigation { flex-direction: row; gap: 10px; margin-top: 15px; }
+            body.exam-mode .nav-btn { padding: 6px 12px; font-size: 12px; width: auto; }
+        }
+
+        @media (max-width: 480px) {
+            .title { font-size: 18px; }
+            body.exam-mode .title { font-size: 14px; }
+            .timer-input, .count-input { width: 50px; font-size: 12px; }
+            .timer { padding: 6px 12px; font-size: 12px; }
+            body.exam-mode .timer { padding: 6px 10px; font-size: 12px; }
+            .question-text { font-size: 14px; }
+            body.exam-mode .question-text { font-size: 13px; }
+            .answer-option { padding: 10px 12px; }
+            body.exam-mode .answer-option { padding: 8px 10px; }
+            .option-text { font-size: 14px; }
+            .grid-container { grid-template-columns: repeat(auto-fill, minmax(30px, 1fr)); gap: 4px; }
+            .grid-item { width: 30px; height: 30px; font-size: 10px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="landing-page" style="display:none !important">
+        <div class="upload-card">
+            <h1>Enhanced Quiz Player</h1>
+            <p id="upload-instruction" style="display: none;">Upload your Excel file to generate an instant interactive quiz.</p>
+            
+            <div class="drop-zone" id="dropZone" style="display: none;">
+                <span class="drop-zone-icon">📁</span>
+                <span class="drop-zone-text">Drag &amp; drop your Excel file here<br>or click to browse</span>
+            </div>
+            <input type="file" id="fileInput" accept=".xlsx, .xls">
+            
+            <div class="loader" id="loader" style="display: none;"></div>
+            <div class="error-msg" id="errorMsg" style="display: none;"></div>
+
+            <div id="action-area" style="display: block;">
+                <div class="success-text">✅ Quiz Generated Successfully!</div>
+                <div class="action-buttons">
+                    <button class="action-btn btn-play" onclick="playNow()">
+                        <span>▶</span> Play Now
+                    </button>
+                    <button class="action-btn btn-download" onclick="downloadHtml()">
+                        <span>⬇</span> Download HTML
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="quiz-app" style="display:block !important">
+        <div class="container">
+            <div class="header">
+                <div class="title">Enhanced Quiz Application</div>
+                <div class="timer-section">
+                    <div class="timer-settings">
+                        <span class="timer-label">Minutes:</span>
+                        <input type="number" class="timer-input" id="minutesInput" value="30" min="1" max="180" __gchrome_uniqueid="1">
+                        <span class="timer-label">Seconds:</span>
+                        <input type="number" class="timer-input" id="secondsInput" value="0" min="0" max="59" __gchrome_uniqueid="2">
+                        <button class="timer-start-btn" onclick="startTimer()">Start</button>
+                    </div>
+                    
+                    <div class="question-shuffle-settings">
+                        <span class="shuffle-label">🔀 Shuffle Questions:</span>
+                        <button class="shuffle-toggle-btn" id="shuffleToggleBtn" onclick="toggleQuestionShuffle()">Enable</button>
+                    </div>
+                    
+                    <div class="question-count-settings">
+                        <span class="count-label">Questions:</span>
+                        <input type="number" class="count-input" id="questionCountInput" value="0" min="1" __gchrome_uniqueid="3">
+                        <span class="count-label" id="totalQuestionsLabel">/ 0</span>
+                        <button class="count-reset-btn" onclick="setQuestionCount()">Set</button>
+                    </div>
+                    
+                    <div class="timer" id="timer">
+                        <span>⏰</span>
+                        <span id="timerDisplay">No timer set</span>
+                        <button class="timer-reset-btn" id="timerResetBtn" onclick="resetTimer()">Reset</button>
+                    </div>
+                    
+                    <div class="question-shuffle-display" id="questionShuffleDisplay">
+                        <span>🔀</span>
+                        <span id="shuffleDisplayText">Shuffle: Off</span>
+                        <button class="shuffle-reset-btn" id="shuffleResetBtn" onclick="resetQuestionShuffle()">Reset</button>
+                    </div>
+                    
+                    <div class="question-count-display" id="questionCountDisplay">
+                        <span>📊</span>
+                        <span id="countDisplayText">0 / 0</span>
+                        <button class="count-reset-display-btn" id="countResetDisplayBtn" onclick="resetQuestionCount()">Reset</button>
+                    </div>
+                    
+                    <button class="exit-btn" onclick="exitQuiz()">
+                        <span>🚪</span>
+                        <span id="exitBtnText">Exit</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="main-content">
+                <div class="quiz-section" id="quizSection">
+                    <div class="question-header">
+                        <div class="question-number" id="questionNumber">Question 1</div>
+                        <div class="question-counter" id="questionCounter">1 / 0</div>
+                    </div>
+                    
+                    <div class="question-text" id="questionText">
+                        Loading question...
+                    </div>
+                    
+                    <div class="answers" id="answersContainer">
+                        </div>
+                    
+                    <div class="navigation">
+                        <button class="nav-btn" id="prevBtn" onclick="previousQuestion()" disabled="">Previous</button>
+                        <button class="nav-btn" id="nextBtn" onclick="nextQuestion()">Next</button>
+                        <button class="nav-btn" id="finishBtn" onclick="finishQuiz()" style="display: none;">Finish</button>
+                        <button class="nav-btn" id="submitBtn" onclick="finishQuiz()" style="display: none;">Submit</button>
+                    </div>
+
+                    <div class="mobile-question-dropdown" id="mobileQuestionDropdown">
+                        <div class="dropdown-header" onclick="toggleMobileDropdown()">
+                            <div class="dropdown-title">Question Navigator</div>
+                            <div class="dropdown-arrow" id="dropdownArrow">▼</div>
+                        </div>
+                        <div class="dropdown-content" id="dropdownContent">
+                            <div class="grid-container" id="mobileQuestionGrid">
+                                </div>
+                        </div>
+                    </div>
+
+                    <div class="exam-question-grid" id="examQuestionGrid">
+                        <div class="exam-grid-header">
+                            <div class="exam-grid-title">Question Navigator</div>
+                            <button class="exam-grid-toggle" id="examGridToggle" onclick="toggleExamGrid()">Collapse</button>
+                        </div>
+                        <div class="exam-grid-container" id="examGridContainer">
+                            </div>
+                    </div>
+                </div>
+
+                <div class="sidebar">
+                    <div class="controls-panel">
+                        <div class="controls-title">Quiz Controls</div>
+                        <div class="mode-toggles">
+                            <button class="toggle-btn" id="darkModeBtn" onclick="toggleDarkMode()">🌙 Dark Mode</button>
+                            <button class="toggle-btn" id="answerModeBtn" onclick="toggleAnswerMode()">💡 Answer Mode</button>
+                            <button class="toggle-btn" id="questionShuffleModeBtn" onclick="toggleQuestionShuffleMode()">🔀 Shuffle Questions</button>
+                            <button class="toggle-btn" id="examModeBtn" onclick="toggleExamMode()">🎓 Simulate Exam Mode</button>
+                        </div>
+                        <div class="jump-to-question">
+                            <label for="jumpInput">Jump to Question:</label>
+                            <div class="jump-input-group">
+                                <input type="number" class="jump-input" id="jumpInput" min="1" placeholder="Number" __gchrome_uniqueid="4">
+                                <button class="jump-btn" onclick="jumpToQuestionNumber()">Go</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="question-grid">
+                        <div class="grid-title">Question Navigator</div>
+                        <div class="grid-container" id="questionGrid">
+                            </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="timer-expired-overlay" id="timerExpiredOverlay">
+        <div class="timer-expired-message">
+            <h2>⏰ Time's Up!</h2>
+            <p>The timer has expired. Your quiz has been automatically submitted.</p>
+            <button class="nav-btn" onclick="hideTimerExpiredOverlay()">Continue</button>
+        </div>
+    </div>
+
+    <div class="result-overlay" id="resultOverlay">
+        <div class="result-message" id="resultMessage">
+            <div class="result-title" id="resultTitle">Quiz Completed!</div>
+            <div class="result-stats" id="resultStats">
+                </div>
+            <button class="nav-btn" onclick="hideResultOverlay()">Continue</button>
+        </div>
+    </div>
+
+    <script>
+        /* --- LANDING PAGE LOGIC --- */
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const landingPage = document.getElementById('landing-page');
+        const quizApp = document.getElementById('quiz-app');
+        const loader = document.getElementById('loader');
+        const errorMsg = document.getElementById('errorMsg');
+        const actionArea = document.getElementById('action-area');
+        const uploadInstruction = document.getElementById('upload-instruction');
+
+        // Drag and Drop Events
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) processFile(files[0]);
+        });
+
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        fileInput.addEventListener('change', (e) => {
+            if (fileInput.files.length > 0) processFile(fileInput.files[0]);
+        });
+
+        function processFile(file) {
+            errorMsg.style.display = 'none';
+            errorMsg.textContent = '';
+            
+            if (!file.name.match(/\.(xlsx|xls)$/)) {
+                showError("Please upload a valid Excel file (.xlsx or .xls)");
+                return;
+            }
+
+            loader.style.display = 'block';
+            dropZone.style.display = 'none';
+            uploadInstruction.style.display = 'none';
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, {defval:""});
+
+                    const parsedQuestions = parseExcelData(jsonData);
+                    
+                    if (parsedQuestions.length === 0) {
+                        throw new Error("No valid questions found in the Excel file.");
+                    }
+
+                    // Success! Store data and Show Options
+                    questions = parsedQuestions;
+                    totalQuestions = questions.length;
+                    selectedQuestionCount = questions.length;
+                    
+                    // Show Action Area
+                    loader.style.display = 'none';
+                    actionArea.style.display = 'block';
+                    
+                } catch (error) {
+                    showError(error.message || "Error parsing Excel file.");
+                    console.error(error);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function playNow() {
+            // Switch UI
+            landingPage.style.display = 'none';
+            quizApp.style.display = 'block';
+            
+            // Initialize
+            initializeQuiz();
+            
+            // Update initial UI counts
+            document.getElementById('questionCountInput').value = totalQuestions;
+            document.getElementById('questionCountInput').max = totalQuestions;
+            document.getElementById('totalQuestionsLabel').textContent = `/ ${totalQuestions}`;
+            document.getElementById('countDisplayText').textContent = `${totalQuestions} / ${totalQuestions}`;
+        }
+
+        function downloadHtml() {
+            // Get current HTML content
+            let htmlContent = document.documentElement.outerHTML;
+
+            // 1. Inject the questions data directly into the code
+            const dataInjection = `let questions = ${JSON.stringify(questions)}; // Pre-filled data`;
+            htmlContent = htmlContent.replace('let questions = [{"question":"Infer which microorganism has affinity to lymph nodes of intestine ?","answers":[{"text":"Sal.typhi","correct":true},{"text":"Sal.enteritidis","correct":false},{"text":"Sal.typhimirium","correct":false},{"text":"Vibrio cholera","correct":false},{"text":"Shigella flexneri","correct":false}]},{"question":"Infer what disease is characterized by splenomegaly, rose spots on the trunk in 25% of patients, nonproductive cough, constipation?","answers":[{"text":"Typhoid fever","correct":true},{"text":"Epidemic Typhus","correct":false},{"text":"Meningitis","correct":false},{"text":"Encephalitis","correct":false},{"text":"Borreliosis","correct":false}]},{"question":"Identify ulceration of Peyer patches in the ileum leads to intestinal hemorrhage or perforation in the case of ....?","answers":[{"text":"Typhoid fever","correct":true},{"text":"Amebiasis","correct":false},{"text":"Shigellosis","correct":false},{"text":"Helminthes","correct":false},{"text":"Paratyphoid B","correct":false}]},{"question":"The patient of 32 years on the 5th day of disease admitted to the district internist  with complaints for severe headache, general weakness, absence of appetite, sleeplessness, temperature increase to 39,0°C in the day of appeal for medical help. Physical examination: pale of skin. A tongue is coated by a greyish-white raid, imprints of teeth on sides. Pulse rate 78 min, PB 110/60 mm of Hg. Meteorism, painless. Liver enlarge on a 1,5-2 cm. Tenderness of muscles in the ileocecal area on palpation. Constipation during 2 days. Which tests of laboratory diagnostics do you use for the confirm Typhoid fever on this day?","answers":[{"text":"Blood culture","correct":true},{"text":"Widal test","correct":false},{"text":"Stool culture","correct":false},{"text":"Bile culture","correct":false},{"text":"Spinal culture","correct":false}]},{"question":"Find the error in the following:  signs of intestinal bleeding in typhoid fever:","answers":[{"text":"Develops during the first week of illness","correct":true},{"text":"Short-term temperature decrease","correct":false},{"text":"Pale, tachycardia, hypotension","correct":false},{"text":"Meteorism, melena","correct":false},{"text":"it occurs with a mild course of the disease","correct":false}]},{"question":"Find the error in the following: signs of intestinal wall  perforation in typhoid fever:","answers":[{"text":"Sudden painful cuttings in the intestines","correct":true},{"text":"Pain in the ileocecum of a permanent character.","correct":false},{"text":"Signs of peritoneal irritation in the ileocecal area","correct":false},{"text":"Pain or tenderness of muscles in the ileocecal area on palpation","correct":false},{"text":"Decreased blood pressure, tachycardia","correct":false}]},{"question":"A patient during a week had risen gradually temperature, appeared headache, general weakness, appetite decreased. He appealed to the doctor on the 8th day of disease. Physical examination: temperature 39,5°C, he gave short answers to the questions, skin pale, coated tongue and fuliginosus, BP is 100/60 mm Hg, pulse rates 74 in min. Meteorism, there are few rose spots on the skin of abdomen. Hepatosplenomegaly. Constipation. Select the diseases?","answers":[{"text":"Typhoid fever","correct":true},{"text":"Salmonellosis","correct":false},{"text":"E.coli","correct":false},{"text":"Food posoning","correct":false},{"text":"Malaria","correct":false}]},{"question":"A patient 36 years had disease during 3 weeks: gradual increase of temperature, from the 2th week of disease temperature purchased undulating character, decline of activity, headache and insomnia. He treated at home him-self from \"Cold\", but treatment was ineffective, and he was directed to the hospital. Physical examination: skin pale, adynamic, temperature 400?, fuliginous tongue, meteorism, tenderness of muscles in the ileocecal area on palpation. Liver enlarge on 2-3 cm. Spleen was palpated. In 2 days dizziness, sonitus, melena appeared after hospitalization. BP 70/40 mm Hg, pulse rate 120 in min, temperature sudden was decreased to norm. Which complication of Typhoid fever developed?","answers":[{"text":"Intestinal bleeding","correct":true},{"text":"Spleen rupture","correct":false},{"text":"Infectious-toxic shock","correct":false},{"text":"Perforation of the intestinal wall","correct":false},{"text":"Meningitis","correct":false}]},{"question":"Select the symptom that distinguish the generalized form of salmonellosis from the localized form.","answers":[{"text":"Hepatosplenomegaly   3. 4. 5.","correct":true},{"text":"Abdominal pain","correct":false},{"text":"Loose stools","correct":false},{"text":"Fever","correct":false},{"text":"Vomiting","correct":false}]},{"question":"Classify the generalized forms of Salmonellosis (non-typhoid):","answers":[{"text":"Typhoid, septicopyemia","correct":true},{"text":"Meningitides","correct":false},{"text":"Colitis, hemocolitis","correct":false},{"text":"1.    Gastratis, gastroenteratis","correct":false},{"text":"Typical , atypical","correct":false}]},{"question":"Explain what is the solution uses for oral rehydration in salmonellosis","answers":[{"text":"glucose-saline solutions","correct":true},{"text":"saline solutions","correct":false},{"text":"alkaline solutions","correct":false},{"text":"acid solutions","correct":false},{"text":"glucose solutions","correct":false}]},{"question":"Explain the ways of transmission of gastroenteritis forms of salmonellosis:","answers":[{"text":"Fecal-oral","correct":true},{"text":"Vertical","correct":false},{"text":"Transmissible","correct":false},{"text":"Sexual","correct":false},{"text":"Airborne","correct":false}]},{"question":"Explain the leading symptom of food poisoning:","answers":[{"text":"Vomiting ,nausea","correct":true},{"text":"Prolonged fever","correct":false},{"text":"Diarrhea , abdominal pain","correct":false},{"text":"Spasm and soreness of the sigmoid colon","correct":false},{"text":"Diarrhea is replaced by constipation","correct":false}]},{"question":"Explain the main mechanism of pathogenesis of the generalized form in non typhoidal salmonella infection:","answers":[{"text":"Prolonged bacteremia and endotoxinemia","correct":true},{"text":"Development of dehydration shock","correct":false},{"text":"Activation of adenylcyclase","correct":false},{"text":"Violation of functional adaptive processes","correct":false},{"text":"Development of acidosis","correct":false}]},{"question":"A man of 24 years old after eating dried pickle in few hours he had nausea, vomiting, severe abdominal pain with diarrhea and sub febrile temperature. By physical examination were noticed the pain around the umbilical. In blood were noticed increase neutrophil count and ESR. The stool had greenish color. Select the diseases?","answers":[{"text":"Salmonellosis","correct":true},{"text":"Typhoid fever","correct":false},{"text":"Shigellosis","correct":false},{"text":"E.coli","correct":false},{"text":"Amoebiasis","correct":false}]},{"question":"The 14 students were admitted to the infectious hospital during 1 day. All patients had similar symptoms: nausea, vomiting, pain in stomach with frequent watery diarrhea. 10 patients had low BP and convulsions of the legs. All patients had curds and sour cream in café for breakfast. Select the diseases?","answers":[{"text":"Salmonellosis","correct":true},{"text":"Cholera","correct":false},{"text":"Shigellosis","correct":false},{"text":"Botulism","correct":false},{"text":"Typhoid fever","correct":false}]},{"question":"A boy of 15 years old is being ill for 3 days, Tempreture is 38°C. His complains are: abdominal pain, vomiting 2 times, frequent stool with greenish color, imperative feeling of defecation. Select the diseases?","answers":[{"text":"Salmonellosis","correct":true},{"text":"Food poisoning","correct":false},{"text":"Pseudotuberculosis","correct":false},{"text":"Dysentery","correct":false},{"text":"Botulism","correct":false}]},{"question":"Infer the material which shoud be used for detection of the pathogen in asymptomatic form of Salmonellosis:","answers":[{"text":"Stool","correct":true},{"text":"Vomit and wash water","correct":false},{"text":"Blood","correct":false},{"text":"Bile","correct":false},{"text":"Spinal fluids","correct":false}]},{"question":"Show the error: shigella is transmitted through the following factors:","answers":[{"text":"Contaminated dust","correct":true},{"text":"Foods, articles of way of life","correct":false},{"text":"Poor hygiene","correct":false},{"text":"Unwashed fruit","correct":false},{"text":"Raw water","correct":false}]},{"question":"Explain in what part of gastrointestinal tract is localized the lesions of dysentery:","answers":[{"text":"Distal parts of large intestine","correct":true},{"text":"Stomach","correct":false},{"text":"Small intestine","correct":false},{"text":"Proximal parts of large intestine","correct":false},{"text":"Cecum","correct":false}]},{"question":"Find out the mistake: all the following statement about shigellosis is true:","answers":[{"text":"Constipation","correct":true},{"text":"Incubation period in average 12-26 days","correct":false},{"text":"Fecal-oral route of transmission","correct":false},{"text":"Rectal prolapsed is one the most common complication","correct":false},{"text":"Inflammation of the sigmoid colon","correct":false}]},{"question":"Explain what is the basis of the pathogenesis of escherichiosis caused by enteroadhesive Escherichia","answers":[{"text":"attachment to epithelial cells, stimulation of mucus production","correct":true},{"text":"destruction of endothelial cells of small blood vessels of the intestinal wall","correct":false},{"text":"increased activity of adenylate cyclase and guanylate cyclase by enterotoxins","correct":false},{"text":"the development of an inflammatory reaction, increased intake of endotoxins into the blood","correct":false},{"text":"increased synthesis of cAMP","correct":false}]},{"question":"Find the error: a patient with acute dysentery is assigned a checkup","answers":[{"text":"Culture of blood","correct":true},{"text":"General blood analysis","correct":false},{"text":"Culture of stool","correct":false},{"text":"Serology test","correct":false},{"text":"Sigmoidoscopy","correct":false}]},{"question":"The patient S, 20 years old, admitted to hospital on 3rd day of disease with complains on fever and diarrhea, temperature 39 C, loss appetite, nausea, weakness, abdominal pain, watery diarrhea, which rapidly becomes bloody. Tenesmus,   abdominal pain, cramping sigmoid intestine. Select the diseases?","answers":[{"text":"Shigellosis","correct":true},{"text":"Food poisoning","correct":false},{"text":"Salmonellosis","correct":false},{"text":"Pseudotuberculosis","correct":false},{"text":"Typhoid fever","correct":false}]},{"question":"A 17-year-old male was transferred to hospital from an outside hospital with a 4-day history of bloody diarrhea, thrombocytopenia, anemia, and elevated blood urea nitrogen and creatinine with concern for hemolytic uremic syndrome (HUS). On admission, significant laboratory findings supporting a diagnosis of HUS included the following: hemoglobin 10.5 g/dL, platelets 45 × 109/L, BUN 43 mg/dL, creatinine 2.46 mg/dL, stool culture grew out E coli O157:H7, classifying his case as typical HUS, although Shiga 1 and 2 toxins were not detected. Select the diseases?","answers":[{"text":"Escherichiosis","correct":true},{"text":"Food poisoning","correct":false},{"text":"Salmonellosis","correct":false},{"text":"Typhoid fever","correct":false},{"text":"Shigellosis","correct":false}]},{"question":"An 16year old patient was admitted to the hospital with edema and high blood pressure. He had been well until 8 days prior to admission when he developed severe abdominal  pain, nausea, vomiting and diarrhea. On the second day the diarrhea became bloody. The diarrhea continued but had lessened in amount, remaining bloody. The mother did not report any fever. On examination he appeared pale and had mild facial edema. Temperature was 37.6'C pulse 104 and regular and the blood pressure was 140/95.  His abdomen was tender. Chest x-ray was clear. Abdominal x-ray disclosed edema of the transverse and descending colon with thumbprinting. Select the diseases?","answers":[{"text":"Escherichiosis","correct":true},{"text":"Food poisoning","correct":false},{"text":"Salmonellosis","correct":false},{"text":"Typhoid fever","correct":false},{"text":"Shigellosis","correct":false}]},{"question":"Explain what helminthiasis is characterized by the development of muscle syndrome?","answers":[{"text":"trichenellosis","correct":true},{"text":"giardiasis","correct":false},{"text":"toxocariasis","correct":false},{"text":"opisthorchiasis","correct":false},{"text":"ascariasis.","correct":false}]},{"question":"Explain what stage of development of helminthiasis is characterized by febrile syndrome?","answers":[{"text":"acute","correct":true},{"text":"chronic","correct":false},{"text":"subacute","correct":false},{"text":"larval","correct":false},{"text":"sexually mature","correct":false}]},{"question":"Conclude what neurological syndromes occur with helminthiasis?","answers":[{"text":"there are no specific neurological signs in helminthiasis","correct":true},{"text":"encephalopathy","correct":false},{"text":"osteochondrosis","correct":false},{"text":"neuralgia","correct":false},{"text":"radiculitis","correct":false}]},{"question":"Explain into what two groups parasitic diseases are classified?","answers":[{"text":"helminthiasis and protozoosis","correct":true},{"text":"larval helminthiasis and protozoa","correct":false},{"text":"trematodes and giardiasis","correct":false},{"text":"nematodes and cestodes","correct":false},{"text":"rematodes and helminthiases","correct":false}]},{"question":"Conclude when to repeat the course of therapy if there is no effect from the treatment of enterobiasis?","answers":[{"text":"2 weeks","correct":true},{"text":"4 weeks","correct":false},{"text":"3weeks","correct":false},{"text":"1 week","correct":false},{"text":"5 weeks","correct":false}]},{"question":"Explain the extra-intestinal complications of enterobiosis","answers":[{"text":"vulvovaginitis","correct":true},{"text":"appendicitis","correct":false},{"text":"sphincteritis","correct":false},{"text":"typhlitis","correct":false},{"text":"peritonitis","correct":false}]},{"question":"Explain what method is used for laboratory diagnosis of enterobiosis?","answers":[{"text":"microscopic","correct":true},{"text":"molecular genetic","correct":false},{"text":"serological","correct":false},{"text":"immunological","correct":false},{"text":"allergic","correct":false}]},{"question":"Explain the intestinal complication of enterobiasis","answers":[{"text":"typhilitis","correct":true},{"text":"vulvovaginitis","correct":false},{"text":"neurodermatitis","correct":false},{"text":"eczema","correct":false},{"text":"appendicitis","correct":false}]},{"question":"Explain when repeated single doses of etiotropic drugs are taken for enterobiasis?","answers":[{"text":"2 weeks","correct":true},{"text":"1 week","correct":false},{"text":"4 weeks","correct":false},{"text":"2 days","correct":false},{"text":"5 weeks","correct":false}]},{"question":"Conclude what are the characteristic changes in the general blood test for enterobiosis?","answers":[{"text":"eosinophilia","correct":true},{"text":"leukopenia","correct":false},{"text":"lymphocytosis","correct":false},{"text":"leukocytosis","correct":false},{"text":"thrombocytopenia","correct":false}]},{"question":"Give an example of the most typical variant of the pre-icteric period of HAV:","answers":[{"text":"Flu-like","correct":true},{"text":"Dyspeptic","correct":false},{"text":"Asthenic","correct":false},{"text":"Abdominal","correct":false},{"text":"Arthralgic","correct":false}]},{"question":"Choose which serological marker can be detected in the acute period of hepatitis A?","answers":[{"text":"Anti-HAV IgM","correct":true},{"text":"HBsAg","correct":false},{"text":"Anti-Hbcore IgM","correct":false},{"text":"Anti-HCV IgM","correct":false},{"text":"Anti-HBsAgD","correct":false}]},{"question":"Distinguish which family the causative agent of viral hepatitis A belongs to:","answers":[{"text":"Picornavirus","correct":true},{"text":"Delta virus.","correct":false},{"text":"Аrbovirus","correct":false},{"text":"Сytomegalovirus","correct":false},{"text":"Retrovirus","correct":false}]},{"question":"According to which of the analyzes can hepatitis A be assumed in the pre-icteric period:","answers":[{"text":"Enzymes ALT, AST","correct":true},{"text":"Total bilirubin","correct":false},{"text":"Protein fractions of blood","correct":false},{"text":"Alkaline phosphatase","correct":false},{"text":"General blood testC","correct":false}]},{"question":"Distinguish the main transmission pathway for viral hepatitis E from viral hepatitis A:","answers":[{"text":"Сontaminated water","correct":true},{"text":"Сontaminated food","correct":false},{"text":"Household contact","correct":false},{"text":"Hemocontact","correct":false},{"text":"Transmissible","correct":false}]},{"question":"Highlight the duration of the incubation period of HEV:","answers":[{"text":"3-8 weeks","correct":true},{"text":"5-6 days","correct":false},{"text":"1-2 weeks","correct":false},{"text":"5-6 months","correct":false},{"text":"more than 6 months","correct":false}]},{"question":"Choose the duration of the icteric period for CAA:","answers":[{"text":"10-12 days","correct":true},{"text":"1-7 days","correct":false},{"text":"3-4 weeks","correct":false},{"text":"14-30 days","correct":false},{"text":">1 month.","correct":false}]},{"question":"Estimate the duration of the pre- icteric period in HAV:","answers":[{"text":"4-7 days","correct":true},{"text":"1-3 days","correct":false},{"text":"8-14 days","correct":false},{"text":"15-16 days","correct":false},{"text":"17-18 days","correct":false}]},{"question":"A 17-year-old patient went to the doctor complaining of jaundice of the skin and sclera, dark urine.  In the epidemiological history: He denies parenteral interventions over the past 6 months, his 10-year-old younger brother recently fell ill with a similar disease. Objectively: the liver is enlarged by 2.0 centimeters. Total bilirubin - 140 mmol/l, direct bilirubin - 105 mmol / l, thymol sample -19 units.  \nChoose a preliminary diagnosis?","answers":[{"text":"Viral hepatitis A","correct":true},{"text":"Viral hepatitis B","correct":false},{"text":"Viral hepatitis C","correct":false},{"text":"Viral hepatitis D","correct":false},{"text":"Viral hepatitis Е","correct":false}]},{"question":"Select the main outcome of acute hepatitis A:","answers":[{"text":"Recovery","correct":true},{"text":"Lightning liver failure","correct":false},{"text":"Cirrhosis of the liver","correct":false},{"text":"Chronic hepatitis","correct":false},{"text":"Transition to chronicling","correct":false}]},{"question":"Choose what is unusual for liver damage in acute viral hepatitis A?","answers":[{"text":"Сytolytic syndrome","correct":true},{"text":"Liver parenchyma fibrosis","correct":false},{"text":"Cholestatic syndrome","correct":false},{"text":"Mesenchymal inflammatory syndrome","correct":false},{"text":"The development of fibrosis","correct":false}]},{"question":"Complete the statement: the main type of treatment for a mild form of viral hepatitis A is ...","answers":[{"text":"Compliance with the regime and diet","correct":true},{"text":"The use of hepatoprotectors","correct":false},{"text":"Infusion therapy","correct":false},{"text":"Enzyme preparations","correct":false},{"text":"Glucocorticoid therapy","correct":false}]},{"question":"The young man has unexpressed jaundice of the skin and sclera, no symptoms of intoxication, a moderate increase in the level of direct bilirubin and transaminase activity. The pre-jaundice period was not pronounced, only weakness was noted. Identify the most likely viral hepatitis:","answers":[{"text":"HCV","correct":true},{"text":"HAV","correct":false},{"text":"HEV","correct":false},{"text":"HBV","correct":false},{"text":"HDV","correct":false}]},{"question":"Specify the level of bilirubin in mild forms of viral hepatitis:","answers":[{"text":"Up to 85 mmol/l","correct":true},{"text":"Up to 20.5 mmol/l","correct":false},{"text":"From 85 to 200 mmol/l","correct":false},{"text":"Over 200 mmol/l","correct":false},{"text":"All answers are correct","correct":false}]},{"question":"Explain what is the reason for the predominant chronic course of HCV:","answers":[{"text":"Mutation of the virus genome","correct":true},{"text":"Weak immune response","correct":false},{"text":"The presence of different genotypes","correct":false},{"text":"Extrahepatic lesions","correct":false},{"text":"Fatty degeneration","correct":false}]},{"question":"Give an example of the most common clinical form of acute HCV:","answers":[{"text":"Asymptomatic","correct":true},{"text":"Jaundice","correct":false},{"text":"Fulminant","correct":false},{"text":"Cholestatic","correct":false},{"text":"Heartless","correct":false}]},{"question":"Delta hepatitis virus needs support to be able to replicate:","answers":[{"text":"Hepadnaviruses","correct":true},{"text":"Enteroviruses","correct":false},{"text":"Mixoviruses","correct":false},{"text":"Caliciviruses","correct":false},{"text":"Flaviviruses","correct":false}]},{"question":"Select the examination method used to confirm the diagnosis of acute HDV:","answers":[{"text":"ELISA","correct":true},{"text":"Ultrasound of the liver","correct":false},{"text":"Puncture biopsy of the liver","correct":false},{"text":"Biochemical blood analysis","correct":false},{"text":"Blood test","correct":false}]},{"question":"Give an example of markers of hepatitis D co-infection:","answers":[{"text":"HBs Ag, AntiHBcor IgM, AntiHDV IgM","correct":true},{"text":"HBs Ag, AntiHBcor IgG, AntiHDV IgM","correct":false},{"text":"AntiHBs, AntiHDV IgM","correct":false},{"text":"AntiHBcor IgM, AntiHDV IgM","correct":false},{"text":"AntiHDV IgM","correct":false}]},{"question":"Highlight which of the listed variants of the pre-jaundice period is NOT characteristic of hepatitis B:","answers":[{"text":"Catarrhal","correct":true},{"text":"Arthralgic","correct":false},{"text":"Dyspeptic","correct":false},{"text":"Astheno-vegetative","correct":false},{"text":"Mixed","correct":false}]},{"question":"Choose which of the biochemical parameters is most important for assessing the severity of viral hepatitis:","answers":[{"text":"Increased bilirubin","correct":true},{"text":"Increased transaminases","correct":false},{"text":"Increased thymol test","correct":false},{"text":"Increased cholesterol","correct":false},{"text":"All answers are correct","correct":false}]},{"question":"Select the features characteristic of viral hepatitis D:","answers":[{"text":"With the appearance of jaundice, intoxication increases","correct":true},{"text":"Mild forms are more common","correct":false},{"text":"With the appearance of jaundice, intoxication decreases","correct":false},{"text":"Mostly children under one year old are ill","correct":false},{"text":"Erased, jaundiced forms are more common.","correct":false}]},{"question":"Select the epidemiological features of hepatitis B:","answers":[{"text":"Lack of seasonality of the disease","correct":true},{"text":"Contact with a hepatitis patient","correct":false},{"text":"Short incubation period","correct":false},{"text":"Contact with animals","correct":false},{"text":"Violation of sanitary and hygienic regime","correct":false}]},{"question":"Determine which laboratory examination methods make it possible to diagnose viral hepatitis in the pre-jaundice period:","answers":[{"text":"Increased AlT","correct":true},{"text":"Increased protein","correct":false},{"text":"Increased thymol test","correct":false},{"text":"Increased cholesterol","correct":false},{"text":"Decrease in the prothrombin index","correct":false}]},{"question":"Choose the duration of the incubation period for viral hepatitis B:","answers":[{"text":"2-6 months.","correct":true},{"text":"2 -7 days","correct":false},{"text":"7 -14 days","correct":false},{"text":"14 -21 days","correct":false},{"text":"14 -45 days.","correct":false}]},{"question":"Choose the level of bilirubin in severe forms of viral hepatitis:","answers":[{"text":"Over 200 mmol/l","correct":true},{"text":"Up to 20.5 mmol/ l","correct":false},{"text":"Up to 85 mmol/ l","correct":false},{"text":"From 85 to 200 mmol/l","correct":false},{"text":"All the answers are correct","correct":false}]},{"question":"Specify what contains the HIV virus:","answers":[{"text":"Revertase","correct":true},{"text":"DNA","correct":false},{"text":"Neuromyxodase","correct":false},{"text":"Hemagglutinin","correct":false},{"text":"Coagulase","correct":false}]},{"question":"Specify which subpopulations of T lymphocytes the pathogen of HIV infection is related to:","answers":[{"text":"T-helpers","correct":true},{"text":"T-suppressors","correct":false},{"text":"T-killers","correct":false},{"text":"Macrophages","correct":false},{"text":"White blood cells","correct":false}]},{"question":"What is the primary immune response immunoglobulins?","answers":[{"text":"Ig G","correct":true},{"text":"Ig A","correct":false},{"text":"Ig M","correct":false},{"text":"Ig E","correct":false},{"text":"Ig D","correct":false}]},{"question":"What drug causes Nephrotoxicity?","answers":[{"text":"Tenofovir","correct":true},{"text":"Ralteglavir","correct":false},{"text":"Lamivudine","correct":false},{"text":"Efavirenz","correct":false},{"text":"Zidovudine","correct":false}]},{"question":"A man, 30 years old, turned to the AIDS center for advice. It turned out from the survey that the man works as a surgeon in a regional hospital, 2 days ago he performed a hernia operation, pricked his finger during the suturing of the wound. The patient and the doctor underwent rapid HIV testing. The patient's result was positive. The consultant conducted a conversation with the applicant, assigned the man a course of post-exposure prophylaxis and a number of HIV tests. After what period of time should HIV testing be repeated?","answers":[{"text":"6 months","correct":true},{"text":"1 month","correct":false},{"text":"3 months","correct":false},{"text":"8 months","correct":false},{"text":"12 months","correct":false}]},{"question":"What class of ART includes Tenofovir?","answers":[{"text":"NtRTI -  nucleotid reverse transcriptase inhibitors","correct":true},{"text":"NNRTI – non-nucleoside reverse transcriptase inhibitors","correct":false},{"text":"Integrase Inhibitors","correct":false},{"text":"Protease inhibitors","correct":false},{"text":"Fusion inhibitors","correct":false}]},{"question":"Which vitamin should be added in the treatment of children infected with HIV?","answers":[{"text":"Vitamin D","correct":true},{"text":"Vitamin A","correct":false},{"text":"Vitamins B","correct":false},{"text":"Vitamin C","correct":false},{"text":"Vitamin E","correct":false}]},{"question":"A 40-year-old woman went to a doctor about oral candidiasis. From anamnesis, he is registered for HIV infection and receives antiretroviral therapy. But he periodically gives up treatment. Examination reveals redness and inflammation of the mucous membrane with or without white plaques; the tongue turns red, the papillae are smoothed. Should this patient be treated for an opportunistic infection?","answers":[{"text":"Fluconazole","correct":true},{"text":"Metronidazole","correct":false},{"text":"Ceftriaxone","correct":false},{"text":"Tinidazole","correct":false},{"text":"Amphotericin B","correct":false}]},{"question":"Specify which clinical manifestations do not occur in stage 2 of HIV infection:","answers":[{"text":"Benign lymphoreticulosis","correct":true},{"text":"Weight loss","correct":false},{"text":"Chronic nonspecific lung diseases","correct":false},{"text":"Superficial bacterial and fungal lesions of the skin and mucous membranes","correct":false},{"text":"Kaposi's sarcoma","correct":false}]},{"question":"Highlight diseases that are not an HIV indicator:","answers":[{"text":"Frequently recurrent erysipelas","correct":true},{"text":"Hairy leukoplakia","correct":false},{"text":"Seborrheic dermatitis","correct":false},{"text":"Private herpes zoster","correct":false},{"text":"Candidiasis esophagitis","correct":false}]},{"question":"Patient Z., 29 years old, arrived from Nigeria a year ago. For 6 months, he experiences weakness, malaise, fever up to 37.5 ° C, periodically notes the appearance of a rash on the body, daily loose stools up to 10 times a day. Weight loss over 10 kg. The cervical and axillary nodes are enlarged. Choose a presumptive diagnosis.","answers":[{"text":"HIV infection","correct":true},{"text":"Lassa Fever","correct":false},{"text":"Legionnaires' disease","correct":false},{"text":"Brucellosis","correct":false},{"text":"Lymphogranulomatosis","correct":false}]},{"question":"Choose the clinical signs for which an HIV test is indicated:","answers":[{"text":"Unexplained weight loss","correct":true},{"text":"Dry cough","correct":false},{"text":"Weakness, lethargy","correct":false},{"text":"Urticaria","correct":false},{"text":"Joint pain","correct":false}]},{"question":"Select the following is Not a common mode of HIV transmission?","answers":[{"text":"Eating contaminated food","correct":true},{"text":"Unprotected sexual intercourse","correct":false},{"text":"Sharing needles or syringes","correct":false},{"text":"Casual contact like hugging or shaking hands","correct":false},{"text":"Mother to child transmission during childbirth or breastfeeding","correct":false}]},{"question":"Choose a term that is used to describe the stage of HIV infection when the virus is not detected in the blood due to effective treatment?","answers":[{"text":"The phase of viral suppression","correct":true},{"text":"HIV-negative phase","correct":false},{"text":"The remission phase","correct":false},{"text":"Asymptomatic phase","correct":false},{"text":"The latent phase","correct":false}]},{"question":"Explain what is the name of the process by which the virus becomes resistant to antiretroviral drugs?","answers":[{"text":"Viral mutation","correct":true},{"text":"Adaptation to antiviral drugs","correct":false},{"text":"Drug tolerance","correct":false},{"text":"Ineffectiveness of treatment","correct":false},{"text":"Immune response","correct":false}]},{"question":"Suppose what is the average life expectancy of people diagnosed with HIV who receive appropriate treatment?","answers":[{"text":"Comparable to the total duration","correct":true},{"text":"Less than 5 years","correct":false},{"text":"5-10 years","correct":false},{"text":"10-20 years","correct":false},{"text":"20-30 years old","correct":false}]},{"question":"Can you Select the expected result for an HIV-infected person who behaves riskily and does not seek medical help?","answers":[{"text":"Stable progression of the disease","correct":true},{"text":"Complete suppression of the virus","correct":false},{"text":"Spontaneous healing","correct":false},{"text":"Increased risk of opportunistic infections and mortality","correct":false},{"text":"Strengthening the immune system","correct":false}]},{"question":"Evaluate how the term AIDS is defined:","answers":[{"text":"The final stage of HIV infection","correct":true},{"text":"The initial stage of HIV infection","correct":false},{"text":"The stage of primary HIV infection","correct":false},{"text":"The stage of secondary diseases in HIV infection","correct":false},{"text":"The window period","correct":false}]},{"question":"Give an example of which of the following viruses causes bronchiolitis:","answers":[{"text":"Respiratory syncytial virus","correct":true},{"text":"Human immunodeficiency virus","correct":false},{"text":"Human papillomavirus","correct":false},{"text":"Epstein Barr virus","correct":false},{"text":"Echo and Coxsackie viruses","correct":false}]},{"question":"Distinguish which part of the Respiratory tract is affected by parainfluenza:","answers":[{"text":"Larynx","correct":true},{"text":"Nasopharynx","correct":false},{"text":"Trachea","correct":false},{"text":"Bronchi","correct":false},{"text":"Alveoli","correct":false}]},{"question":"Distinguish which  viruses is known  to cause  hemorrhagic cystitis, diarrhea, conjunctivitis?","answers":[{"text":"Adenovirus","correct":true},{"text":"Respiratory syncytial  virus","correct":false},{"text":"Rhinovirus","correct":false},{"text":"Rotavirus","correct":false},{"text":"Parainfluenza","correct":false}]},{"question":"Select  which complication of the flu has an infectious – allergic character:","answers":[{"text":"Myocarditis","correct":true},{"text":"Pneumonia","correct":false},{"text":"Otitis media","correct":false},{"text":"Sinusitis","correct":false},{"text":"Lymphadenitis","correct":false}]},{"question":"Select which part of respiratory tract mostly get affected in parainfluenza virus infection –","answers":[{"text":"Upper and lower respiratory tract","correct":true},{"text":"Upper respiratory tract","correct":false},{"text":"Lower respiratory tract","correct":false},{"text":"Upper respiratory tract and pharyngitis","correct":false},{"text":"None","correct":false}]},{"question":"A 20 years old boy came to the infectious department  with the complaints  of sudden  onset of fever, tonsillitis, rhinorrhea, cough, moderate abdominal ache. During the medical inspection on the 4th day there are fauces hyperemia and painful neck lymph nodes. Apply which is  the most possible etiology of the disease?","answers":[{"text":"Adenovirus","correct":true},{"text":"β-hemolytic streptococcus of A-group","correct":false},{"text":". Neisseria gonorrhoea","correct":false},{"text":"Epstein-Barr virus","correct":false},{"text":"Influenza virus","correct":false}]},{"question":"Select from the following which is the rarest clinical manifestations of adenovirus infection –","answers":[{"text":"Bronchiolitis","correct":true},{"text":"Pharyngitis","correct":false},{"text":"Pneumonia","correct":false},{"text":"Tonsillitis","correct":false},{"text":"Conjunctivitis","correct":false}]},{"question":"Solve out the incorrect  statement  about rhinovirus:","answers":[{"text":"Incubation  period  1- 7 days","correct":true},{"text":"Belongs to Picornaviridae family","correct":false},{"text":"Cause common  cold","correct":false},{"text":"Nasal discharge,congestion","correct":false},{"text":"Stages :  dry →Exudate→resolution  or complication","correct":false}]},{"question":"Select the primary  localized   form of meningococcal  infection:","answers":[{"text":"Nasopharyngitis","correct":true},{"text":"Meningoencephalitis","correct":false},{"text":"Meningococcemia","correct":false},{"text":"Meningitis","correct":false},{"text":"Meningococcemia+ Meningitis","correct":false}]},{"question":"Distinguish the main complication which  will develop in severe meningococcemia","answers":[{"text":"Waterhouse – Friedrischen syndrome","correct":true},{"text":"Brain edema","correct":false},{"text":"Hydrocephalus","correct":false},{"text":"Blindness","correct":false},{"text":"Deafness","correct":false}]},{"question":"The patient came to infectious department with the following complaints:\nFever, headache, neck stiffness, vomiting,\nHyperesthesia, irritability, photophobia and kernig sign is positive; explain the main method which can confirm diagnosis –","answers":[{"text":"Cerebrospinal fluid analysis","correct":true},{"text":"Complete blood count","correct":false},{"text":"Polymerase chain reaction (PCR)","correct":false},{"text":"Brian CT","correct":false},{"text":"Microscopy","correct":false}]},{"question":"Distinguish the main characteristics  manifestation for meningococcemia:","answers":[{"text":"Skin rash","correct":true},{"text":"Lethargy","correct":false},{"text":"Vomiting","correct":false},{"text":"Neck stiffness","correct":false},{"text":"Photophobia","correct":false}]},{"question":"Select which event in the management of meningococcal\nmeningitis is a priority?","answers":[{"text":"Immediate administration of antibiotics","correct":true},{"text":"IV saline infusion","correct":false},{"text":"Immediate oxygen supply","correct":false},{"text":"Abacavir","correct":false},{"text":"Diuretics","correct":false}]},{"question":"Apply which is not the complication of meningicoccemia:","answers":[{"text":"Brain edema","correct":true},{"text":"Disseminated intravascular coagulopathy","correct":false},{"text":"Waterhouse Friederischen syndrome","correct":false},{"text":"Septic shock","correct":false},{"text":"Gangrene","correct":false}]},{"question":"Select  the  characteristics seasonality  of meningococcal  infection:","answers":[{"text":"Winter and spring","correct":true},{"text":"Summer","correct":false},{"text":"Rainy","correct":false},{"text":"Winter","correct":false},{"text":"Autumn","correct":false}]},{"question":"Create which disease  if presence  of hemorrhagic  rash and  intoxication syndrome:","answers":[{"text":"Meningococcemia","correct":true},{"text":"Meningococcal nasopharyngitis","correct":false},{"text":"Meningitis","correct":false},{"text":"meningoencephalitis","correct":false},{"text":"Pneumococcal  meningitis","correct":false}]},{"question":"Select and rule out the main mode of transmission  of meningococcal  infection","answers":[{"text":"Respiratory droplets","correct":true},{"text":"Fecal oral","correct":false},{"text":"Vertical transmission","correct":false},{"text":"Parenteral","correct":false},{"text":"Sexual contact","correct":false}]},{"question":"The patient is 20 years old, urgently hospitalized in the infectious diseases department with complaints of a sudden increase in temperature to 39.5 ° C, severe headaches, repeated vomiting, which does not bring relief. Objectively: he is inhibited, lying on his side, all meningeal signs are sharply positive. In the analysis of liquor, the protein content is 1.1 g/l, cytosis - 1000 cells is represented by neutrophils, In the bacteriological culture of liquor: Neiseria meningitidis. Calculate the dose of penicillin and the method of administration of the drug.","answers":[{"text":"300000 IU/kg/daily – intramuscular/intravenous","correct":true},{"text":"30000 IU /kg /daily - intramuscular/intravenous","correct":false},{"text":"30000 IU/ kg /daily – orally","correct":false},{"text":"3000 IU/kg/ daily – orally","correct":false},{"text":"300000 IU/kg/daily – subcutaneous","correct":false}]},{"question":"Assume which herpes is the causative agent of  genital infection?","answers":[{"text":"Herpes simplex virus  2","correct":true},{"text":"Herpes simplex virus  1","correct":false},{"text":"Herpes  zoster","correct":false},{"text":"Epstein-Barr  virus","correct":false},{"text":"Cytomegalovirus","correct":false}]},{"question":"Generalize the  target  for herpes simplex viruses:","answers":[{"text":"Mucous membranes","correct":true},{"text":"Hepatocytes","correct":false},{"text":"Epidermis","correct":false},{"text":"Neurons","correct":false},{"text":"Cilia","correct":false}]},{"question":"Distinguish characteristics of herpetic whitlow -","answers":[{"text":"Painful,edema ,erythema and vesicles on fingers","correct":true},{"text":"Appears as mucocutaneous","correct":false},{"text":"Late diagnosis cause  coma","correct":false},{"text":"Spread through fecal- oral route","correct":false},{"text":"It is visceral infection","correct":false}]},{"question":"Assume the contagious  period  of  herpes  zoster:","answers":[{"text":"Last for 48 hrs before  rash appearance","correct":true},{"text":"When the rash start to appear","correct":false},{"text":"Within 2- 5 hrs after exposure","correct":false},{"text":"When skin lesion becomes itchy","correct":false},{"text":"Till rash begin to disappear","correct":false}]},{"question":"Which form of  cells apply when Tzanck smear by gimesa stain is done –","answers":[{"text":"Lipschutz bodies and multinucleated giant cells","correct":true},{"text":"Hemosiderian  cells","correct":false},{"text":"Mast cells","correct":false},{"text":"Eosinophils","correct":false},{"text":"Lymphocytes","correct":false}]},{"question":"Select the clinical manifestation of herpes simplex virus which involves buccal mucosa .","answers":[{"text":"Gingivostomatitis","correct":true},{"text":"Tonsillitis","correct":false},{"text":"Hyperemia of uvula","correct":false},{"text":"Spot on oral mucosa","correct":false},{"text":"White patches filled with puss","correct":false}]},{"question":"Select the diagnostic test which can differentiate between herpes simplex virus 1 and  herpes simplex virus 2 ?","answers":[{"text":"Herpes simplex virus DNA – PCR","correct":true},{"text":"Virus isolation","correct":false},{"text":"Microscopy","correct":false},{"text":"Tzank smear","correct":false},{"text":"Giemsa – stained smears","correct":false}]},{"question":"Calculate the confirmation test for aseptic meningitis cause by Herpes simplex virus type 2?","answers":[{"text":"By Polymerase chain reaction DNA in Cerebrospinal fluid","correct":true},{"text":"By virus isolation","correct":false},{"text":"By MRI","correct":false},{"text":"By CT – scan","correct":false},{"text":"By microscopy","correct":false}]},{"question":"Assume the genetic material of poxviruses is composed of:","answers":[{"text":"Double-stranded DNA","correct":true},{"text":"Single-stranded RNA","correct":false},{"text":"Double-stranded RNA","correct":false},{"text":"Single-stranded DNA","correct":false},{"text":"Circular DNA","correct":false}]},{"question":"Generalize  what step should be performed when a person is diagnosed with smallpox,","answers":[{"text":"Put in isolation in the hospital","correct":true},{"text":"Sent home with medicine to ease symptoms","correct":false},{"text":"Admitted to the hospital","correct":false},{"text":"Give treatment","correct":false},{"text":"Wait and watch","correct":false}]},{"question":"Compare which symptom of smallpox infection shows up first?","answers":[{"text":"Lymphadenopathy","correct":true},{"text":"Rash","correct":false},{"text":"High fever","correct":false},{"text":"Headache and body aches","correct":false},{"text":"B and C","correct":false}]},{"question":"Explain the time period of appearance of rash in monkey pox?","answers":[{"text":"2- 4 weeks","correct":true},{"text":"1-4 days","correct":false},{"text":"5-10 days","correct":false},{"text":"10-14 days","correct":false},{"text":"7-8 days","correct":false}]},{"question":"Complete the sentence;\nThe vaccine used to eradicate smallpox originated as:","answers":[{"text":"Live cowpox","correct":true},{"text":"Live smallpox","correct":false},{"text":"A genetic recombinant","correct":false},{"text":"Killed whole virus","correct":false},{"text":"Passive  vaccination","correct":false}]},{"question":"Human to human monkeypox virus transmission can occur by which of the following routes?\nUse the option and find correct statement:","answers":[{"text":"A& B","correct":true},{"text":"Respiratory droplets","correct":false},{"text":"Exposure to skin rashes","correct":false},{"text":"Fecal  oral","correct":false},{"text":"B& C","correct":false}]},{"question":"Solve,which of the following antiviral drug regimen has been found to be effective for the monkeypox virus?","answers":[{"text":"Ticovarimat for 2 weeks","correct":true},{"text":"Remdesivir for 10 days","correct":false},{"text":"Tamiflu for 5 weeks","correct":false},{"text":"Brincidofoir for 4 weeks","correct":false},{"text":"Acyclovir 1 week","correct":false}]},{"question":"Apply of which the following specimen is frequently collected for the diagnosis of the monkeypox virus infection?","answers":[{"text":"Lesion swab specimen","correct":true},{"text":"Blood specimen","correct":false},{"text":"Sputum specimen","correct":false},{"text":"Urine specimen","correct":false},{"text":"Sputum","correct":false}]},{"question":"The 37-year-old forester went to a local medical institution with fever up to (39 ° C), chills, pustules on his face, arms and legs, some of them ulcerated, pain and enlargement of axillary lymph nodes. For the last 6 months, he has been surrounded by wildlife in the humid rainforests. Got sick about a week ago.\nChoose an analysis to confirm the diagnosis?","answers":[{"text":"Polymerase chain reaction","correct":true},{"text":"Blood test","correct":false},{"text":"Sputum culture","correct":false},{"text":"Skin biopsy","correct":false},{"text":"Serology","correct":false}]},{"question":"Create what is the typical timeframe for the skin blisters or nodules to start diminishing during Monkeypox infection?","answers":[{"text":"2- 3 weeks","correct":true},{"text":"2- 5 days","correct":false},{"text":"1 week","correct":false},{"text":"3- 5 weeks","correct":false},{"text":"5-10 days","correct":false}]},{"question":"Specify the reason for the transition of an acute infectious process into a chronic infection in brucellosis:","answers":[{"text":"All of the above","correct":true},{"text":"Incomplete phagocytosis","correct":false},{"text":"Allergization of the body","correct":false},{"text":"Changing the body's reactivity","correct":false},{"text":"Formation of unstable immunity","correct":false}]},{"question":"Interpret peripheral blood in brucellosis:","answers":[{"text":"Normo- or leukopenia, lympho-, monocytosis","correct":true},{"text":"Leukocytosis, shift of the leukocyte formula to the left","correct":false},{"text":"Presence of atypical mononuclear cells","correct":false},{"text":"Leukocytosis, lymphocytosis, thrombocytopenia","correct":false},{"text":"Anemia, lymphopenia, thrombocytopenia","correct":false}]},{"question":"Select the drug of choice for the treatment of brucellosis:","answers":[{"text":"Tetracyclines","correct":true},{"text":"Penicillins","correct":false},{"text":"Cephalosporins","correct":false},{"text":"Macrolides","correct":false},{"text":"Nitrofurans","correct":false}]},{"question":"Brucella can be determined by the bacteriological method in all of the above. Find the error:","answers":[{"text":"Feces","correct":true},{"text":"Blood","correct":false},{"text":"Urine","correct":false},{"text":"Bone marrow","correct":false},{"text":"Liquor","correct":false}]},{"question":".Determine the sequence of clinical forms of brucellosis in proper order: 1. Acute brucellosis; 2. Residual brucellosis; 3. Chronic brucellosis; 4. Subacute brucellosis; 5. The incubation period.","answers":[{"text":"5, 1, 4, 3, 2","correct":true},{"text":"5, 1, 2, 4, 3","correct":false},{"text":"5, 1, 4, 2, 3","correct":false},{"text":"5, 2, 1, 4, 3","correct":false},{"text":"5, 2 , 3,  4, 1","correct":false}]},{"question":"Select the disease that causes endocarditis:","answers":[{"text":"Brucellosis","correct":true},{"text":"Diptheria","correct":false},{"text":"Leptospirosis","correct":false},{"text":"Cholera","correct":false},{"text":"Botulism","correct":false}]},{"question":"Select a disease in which incomplete phagocytosis is observed:","answers":[{"text":"Brucellosis","correct":true},{"text":"Plague","correct":false},{"text":"Influenza","correct":false},{"text":"Meningococcal infections","correct":false},{"text":"Measles","correct":false}]},{"question":"Indicate which organs are affected by brucellosis:","answers":[{"text":"All of the above","correct":true},{"text":"Liver","correct":false},{"text":"Spleen","correct":false},{"text":"Peripheral lymph nodes","correct":false},{"text":"Joints","correct":false}]},{"question":"Explain what methods are used for diagnostics of Yersiniosis:","answers":[{"text":"Bacteriological method","correct":true},{"text":"Immunoenzyme analysis","correct":false},{"text":"Bacterioscopic method","correct":false},{"text":"Allergic test","correct":false},{"text":"immunological method","correct":false}]},{"question":"Infer route of transmission at Yersiniosis","answers":[{"text":"Faecal-oral","correct":true},{"text":"Aerosol","correct":false},{"text":"Blood transfusion","correct":false},{"text":"Transmits by the vectors","correct":false},{"text":"Sexual","correct":false}]},{"question":"Choose the features of rash at intestinal Yersiniosis:","answers":[{"text":"small macular, point, on the symmetric areas of trunk and extremities","correct":true},{"text":"spotted, feel like confluence on the symmetric areas of trunk and extremities","correct":false},{"text":"papullar and roseola on the sides of trunk, on the extensoric surfaces of upper extremities","correct":false},{"text":"punctulate, scarlatiniform on the under body of abdomen","correct":false},{"text":"hemorrhagic rash","correct":false}]},{"question":"Explain what chronic inflammatory diseases are accompanied by Yersinia enterocolitica?","answers":[{"text":"Arthritis","correct":true},{"text":"Hepatitis","correct":false},{"text":"Vasculitis","correct":false},{"text":"Meningitis","correct":false},{"text":"Thrombophlebitis","correct":false}]},{"question":"Explain where abdominal pain is localized in the gastroenteric variant of yersiniosis?","answers":[{"text":"localized in the umbilical region","correct":true},{"text":"localized in the left iliac region;","correct":false},{"text":"localized in the lower abdomen;","correct":false},{"text":"are absent","correct":false},{"text":"localized in the right iliac region","correct":false}]},{"question":"Show which symptom is absent in the gastrointestinal form of salmonellosis, in contrast to yersiniosis","answers":[{"text":"exanthema","correct":true},{"text":"abdominal pain;","correct":false},{"text":"diarrhea","correct":false},{"text":"fever","correct":false},{"text":"constipation","correct":false}]},{"question":"Make a conclusion: what is the difference between the generalized form of yersiniosis and the abdominal form?","answers":[{"text":"the possibility of developing jaundice","correct":true},{"text":"the presence of abdominal pain;","correct":false},{"text":"the presence of loose stools","correct":false},{"text":"the presence of febrile temperature","correct":false},{"text":"the presence of constipation","correct":false}]},{"question":"Explain how the generalized form of yersiniosis differs from the gastrointestinal form?","answers":[{"text":"hepato/splenomegaly","correct":true},{"text":"abdominal pain","correct":false},{"text":"acute onset of the disease","correct":false},{"text":"febrile temperature","correct":false},{"text":"constipation","correct":false}]},{"question":"Explain in which variant of yersiniosis diffuse ileitis with intestinal perforation is more common?","answers":[{"text":"septic variant of yersiniosis","correct":true},{"text":"abdominal variant of yersiniosis;","correct":false},{"text":"secondary focal variants of yersiniosis","correct":false},{"text":"gastrointestinal variant of yersiniosis","correct":false},{"text":"anginal variant","correct":false}]},{"question":"Explain to which drugs Yersinia is sensitive","answers":[{"text":"fluoroquinolones","correct":true},{"text":"Macrolides","correct":false},{"text":"Penicillin","correct":false},{"text":"trimethoprim","correct":false},{"text":"sulfonamides;","correct":false}]},{"question":"Select possible complications and outcomes for cutaneous anthrax:","answers":[{"text":"Secondary septicemia","correct":true},{"text":"Recovery","correct":false},{"text":"Lethal outcome","correct":false},{"text":"infectious-toxic shock","correct":false},{"text":"Dehydration","correct":false}]},{"question":"explain what is characteristic of the cutaneous form of anthrax?","answers":[{"text":"gelatinous painless edema and regional lymphadenitis","correct":true},{"text":"gelatinous painless edema without regional lymphadenitis","correct":false},{"text":"gelatinous painful edema without regional lymphadenitis","correct":false},{"text":"gelatinous painful edema and regional lymphadenitis","correct":false},{"text":"gelatinous painful edema","correct":false}]},{"question":"Idicate which of the following methods are used to diagnose anthrax:","answers":[{"text":"Bacterioscopic and bacteriological methods","correct":true},{"text":"Agglutination reaction by Wright - Heddleson","correct":false},{"text":"Serological Widal's reaction","correct":false},{"text":"Allergic test","correct":false},{"text":"Microscopic test","correct":false}]},{"question":"Select the most common localization of anthrax carbuncle:","answers":[{"text":"Upper limbs","correct":true},{"text":"Head","correct":false},{"text":"Neck","correct":false},{"text":"Body","correct":false},{"text":"Lower limbs","correct":false}]},{"question":"Find the error: typical symptoms of anthrax carbuncle include:","answers":[{"text":"Pain","correct":true},{"text":"Black scab","correct":false},{"text":"Secondary vesicle","correct":false},{"text":"Edema","correct":false},{"text":"Painless","correct":false}]},{"question":"Explain what should be done in the following situation: the patient is diagnosed as \"Anthrax, a cutaneous form, a mild period.\" This patient","answers":[{"text":"Patient is hospitalized and isolated","correct":true},{"text":"Can continue to be treated as an outpatient","correct":false},{"text":"If desired, the patient is hospitalized","correct":false},{"text":"Continues treatment in hospital","correct":false},{"text":"Prescribe treatment at home","correct":false}]},{"question":"Indicate the most common complications of pulmonary anthrax:","answers":[{"text":"Hemorrhagic pulmonary edema","correct":true},{"text":"Intestinal perforation","correct":false},{"text":"Exudative pleurisy","correct":false},{"text":"Intestinal bleeding","correct":false},{"text":"lymphadenitis","correct":false}]},{"question":"A 43-year-old man having livestock as a profession had a cutaneous anthrax infection on the dorsal surface of his left thumb. The patient was infected with anthrax by slaughtering a sheep infected with Bacillus anthracis. Prescribe treatment","answers":[{"text":"Penicillin","correct":true},{"text":"Rifampicins","correct":false},{"text":"Biseptol","correct":false},{"text":"Lincomycin","correct":false},{"text":"Fluconazole","correct":false}]},{"question":"Indicate which of the following is an effective treatment for clinical rabies:","answers":[{"text":"None of the above","correct":true},{"text":"Wound cleansing","correct":false},{"text":"Immunization with modern cell-culture vaccine","correct":false},{"text":"Infusion with HRIG (human anti-rabies immunoglobulin)","correct":false},{"text":"Antiviral therapy","correct":false}]},{"question":"Signs of rabies include all of the following. Find error:","answers":[{"text":"Rash","correct":true},{"text":"Headache","correct":false},{"text":"Hydrophobia","correct":false},{"text":"Disorientation","correct":false},{"text":"Hypersalivation","correct":false}]},{"question":"Indicate the probability of death from rabies if it is not treated:","answers":[{"text":"1","correct":true},{"text":"0.9999","correct":false},{"text":"0.99","correct":false},{"text":"0.97","correct":false},{"text":"0.5","correct":false}]},{"question":"Rabies clinically progresses through the following periods of illness. Find error:","answers":[{"text":"Recovery period","correct":true},{"text":"Incubation","correct":false},{"text":"Paralytic period","correct":false},{"text":"Height period","correct":false},{"text":"Prodromal period","correct":false}]},{"question":"Acute disease induced by an exotoxin and is characterized by painful muscular contractions of masseter, neck, trunk muscles, abdominal rigidity, generalized spasm - position of opisthotonus and facial expression (risus sardonicus). Identify the disease.","answers":[{"text":"Tetanus","correct":true},{"text":"Rabies","correct":false},{"text":"Meningitis","correct":false},{"text":"Anthrax","correct":false},{"text":"Plague","correct":false}]},{"question":"Indicate what causes the main symptoms of tetanus:","answers":[{"text":"Production of tetanospasmin","correct":true},{"text":"Multiplication of the organisms at the site of the infection","correct":false},{"text":"Production of botulin toxin","correct":false},{"text":"Bacteria multiplying in bloodstream","correct":false},{"text":"Production of lethal factors","correct":false}]},{"question":"The following conditions lead to death in tetanus. Find error:","answers":[{"text":"Renal insufficiency","correct":true},{"text":"Asphyxia","correct":false},{"text":"Cardiac paralysis","correct":false},{"text":"Complications (pneumonia, sepsis)","correct":false},{"text":"Thromboembolism of the pulmonary arteries","correct":false}]},{"question":"Indicate which structures of the nervous system are affected in tetanus:","answers":[{"text":"Interneurons","correct":true},{"text":"Motor fibers","correct":false},{"text":"Motoneurons","correct":false},{"text":"Sensory fibers","correct":false},{"text":"Nerve endings","correct":false}]},{"question":"Complications of tetanus include all of the following. Find error:","answers":[{"text":"Lung infarction","correct":true},{"text":"Bronchopneumonia","correct":false},{"text":"Lobulary pneumonia","correct":false},{"text":"Pulmonary atelectasis","correct":false},{"text":"Thromboembolism of the pulmonary arteries","correct":false}]},{"question":"Specify the symptoms of central nervous system damage due to tetanus:","answers":[{"text":"Clear consciousness","correct":true},{"text":"Confusion","correct":false},{"text":"Complete loss of consciousness","correct":false},{"text":"Delirious state","correct":false},{"text":"Inadequate condition","correct":false}]},{"question":"Indicate  the  type of bacteria that causes epidemic typhus:","answers":[{"text":"Rickettsae prowazeki","correct":true},{"text":"Rickettsae typhi","correct":false},{"text":"Rickettsae tsutsugamushi","correct":false},{"text":"Rickettsae akari","correct":false},{"text":"Rickettsae rickettsii","correct":false}]},{"question":"Name the rickettsial diseases which is louse born:","answers":[{"text":"Epidemic typhus","correct":true},{"text":"Endemic typhus","correct":false},{"text":"Rocky Mountain Spotted fever","correct":false},{"text":"Scrab typhus","correct":false},{"text":"Indian typhus","correct":false}]},{"question":"All of the following rickettsial diseases are zoonoses. Show error:","answers":[{"text":"Epidemic typhus","correct":true},{"text":"Endemic typhus","correct":false},{"text":"Scrub typhus","correct":false},{"text":"Rocky Mountain Spotted fever","correct":false},{"text":"Indian typhus","correct":false}]},{"question":"Specify the pathogen that causes Brill-Zinsser disease:","answers":[{"text":"Rickettsae prowazeki","correct":true},{"text":"Rickettsae typhi","correct":false},{"text":"Rickettsae tsutsugamushi","correct":false},{"text":"Rickettsae akari","correct":false},{"text":"Rickettsae rickettsii","correct":false}]},{"question":"Rickettsiae are characterized by the following statements. Find error.","answers":[{"text":"All the rickettsial diseases are zoonoses","correct":true},{"text":"Rickettsiae are obligate intracellular bacteria","correct":false},{"text":"Weil-Felix test can be used in the diagnosis of rickettsial disease","correct":false},{"text":"Rickettsiae are gram negative but stain poorly with standard Gram Stain","correct":false},{"text":"There is no transmission from human to human","correct":false}]},{"question":"Variable onset, often sudden and marked by headache, chills, prostration, fever, macular eruption appears on the fifth to sixth day on the upper trunk, and then to the entire body, but not face, palms, or soles; recrudescence might occur (Brill-Zinsser disease). Identify the disease:","answers":[{"text":"Epidemic typhus","correct":true},{"text":"Endemic typhus","correct":false},{"text":"Scrub typhus","correct":false},{"text":"Q-fever","correct":false},{"text":"Rocky Mountain Spotted fever","correct":false}]},{"question":"Determine the main mechanism of the pathogenesis of epidemic typhus:","answers":[{"text":"Functional disorders of the vascular apparatus","correct":true},{"text":"Lymphadenitits and lymphangitis","correct":false},{"text":"Damage to the CNS","correct":false},{"text":"Impaired liver and kidney function","correct":false},{"text":"Damage to the osteoarticular apparatus","correct":false}]},{"question":"Indicate the error: in the initial period of the disease, Q fever is characterized by the following symptoms:","answers":[{"text":"Hematuria","correct":true},{"text":"Fever","correct":false},{"text":"Hyperemia of the face","correct":false},{"text":"Hepatolienal syndrome","correct":false},{"text":"Meningism","correct":false}]},{"question":"Point out, what laboratory method is used to confirm the diagnosis of ricketsiosis:","answers":[{"text":"Serological studies","correct":true},{"text":"Blood culture","correct":false},{"text":"Microscopy of a blood smear","correct":false},{"text":"Stool culture","correct":false},{"text":"Urine culture","correct":false}]},{"question":"Outline the typical complication of epidemic typhus:","answers":[{"text":"Pulmonary embolism","correct":true},{"text":"Pneumonia","correct":false},{"text":"Paralysis","correct":false},{"text":"Pyelitis","correct":false},{"text":"Blindness","correct":false}]},{"question":"Select a disease in which complications such as pleuritis, thrombophlebitis, arthritis, pulmonary infarction appear:","answers":[{"text":"Q-fever","correct":true},{"text":"Meningococcal infection","correct":false},{"text":"Typhoid fever","correct":false},{"text":"Botulism","correct":false},{"text":"Tetanus","correct":false}]},{"question":"Outline what kind of immunity is developed after suffering epidemic typhus:","answers":[{"text":"Strong immunity","correct":true},{"text":"Weak immunity up to 1 month","correct":false},{"text":"Short-term immunity - up to 6 months","correct":false},{"text":"Long-term immunity - up to 1 year","correct":false},{"text":"Artificial, active immunity","correct":false}]},{"question":"Select a disease in which a primary affect appears at the site of a tick bite, high fever, headache, pain in the limbs and lower back, meningeal syndrome, in the blood: moderate leukocytosis, lymphocytosis, eosinopenia:","answers":[{"text":"Borreliosis","correct":true},{"text":"Epidemic typhus","correct":false},{"text":"Endemic typhus","correct":false},{"text":"Q-fever","correct":false},{"text":"Chickungunia","correct":false}]},{"question":"Specify the combination of symptoms characteristic of systemic tick-borne borreliosis:","answers":[{"text":"Fever, erythema annulare, cardiac, neurological lesions, arthritis","correct":true},{"text":"Fever, hepatosplenomegaly, roseolous rash, polilymphoadenopathy","correct":false},{"text":"Fever, arthritis, erythema nodosum; nausea, vomiting, diarrhea","correct":false},{"text":"Fever, damage to the heart and joints, meningoencephalitis","correct":false},{"text":"Fever, petechial rash, polyneuropathia, hepatosplenomegaly","correct":false}]},{"question":"Distinguish the disease, which is characterized by the appearance of erythema migrans in the area of tick bite:","answers":[{"text":"Borreliosis","correct":true},{"text":"Erysipelas","correct":false},{"text":"Anthrax","correct":false},{"text":"Plague","correct":false},{"text":"Endemic typhus","correct":false}]},{"question":"Lyme disease has all of the following signs of joint damage. Show error:","answers":[{"text":"Joints are not affected","correct":true},{"text":"Have an infectious-allergic nature","correct":false},{"text":"May lead to osteoporosis, osteoarthritis","correct":false},{"text":"Lesions of large joints","correct":false},{"text":"Have a protracted and chronic course","correct":false}]},{"question":"A 44-year-old woman was admitted to the hospital in July with mild oral paralysis and mild fatigue that persisted for 2 months. During examination: T°-37.2°C, BP -120/60 mm Hg. There are no wheezes in the lungs; however, her mouth muscles were slightly tense. She could open her mouth about 1.5 cm, but the left side of her mouth drooped on one side and she had difficulty closing her left eye. Thus, general examination of her mouth suggested facial palsy. It turned out that 3 months ago, during a hike, she was bitten by ticks. Select disease:","answers":[{"text":"Borreliosis","correct":true},{"text":"Tetanus","correct":false},{"text":"Tick-born encephalitis","correct":false},{"text":"Polyomielitis","correct":false},{"text":"Meningococcal infection","correct":false}]},{"question":"Specify what symptom helps to differentiate borreliosis from other diseases:","answers":[{"text":"The presence of erythema migrans","correct":true},{"text":"The presence of a bubo","correct":false},{"text":"The presence of a hard chancre","correct":false},{"text":"The presence of a black eschar","correct":false},{"text":"The presence of vesicular-papular rashes","correct":false}]},{"question":"Specify the characteristic of Lyme disease:","answers":[{"text":"The mechanism of infection is transmissible","correct":true},{"text":"The causative agent is rickettsia","correct":false},{"text":"Reservoir is a human","correct":false},{"text":"The main vector - fleas","correct":false},{"text":"The incidence is recorded in the steppe regions","correct":false}]},{"question":"Point out the error in the Lyme disease statement:","answers":[{"text":"Found in India","correct":true},{"text":"Caused by a spirochete","correct":false},{"text":"Natural focal infections","correct":false},{"text":"Vectors - ixodid ticks","correct":false},{"text":"Distributed in wooded areas","correct":false}]},{"question":"Show the causative agent of tick-borne encephalitis:","answers":[{"text":"Virus","correct":true},{"text":"Bacteria","correct":false},{"text":"Rickettsia","correct":false},{"text":"Chlamydia","correct":false},{"text":"Parasite","correct":false}]},{"question":"Name the main reservoir and vectors of agent of encephalitis:","answers":[{"text":"Ticks","correct":true},{"text":"Liсe","correct":false},{"text":"Fleas","correct":false},{"text":"Flies","correct":false},{"text":"Chiggers","correct":false}]},{"question":"Specify the route of transmission of two-wave fever of tick-borne encephalitis:","answers":[{"text":"Dairy produce","correct":true},{"text":"Contact","correct":false},{"text":"Airborne","correct":false},{"text":"Transmissible","correct":false},{"text":"Parenteral","correct":false}]},{"question":"Indicate the changes in the cerebrospinal fluid in tick-borne encephalitis","answers":[{"text":"Lymphocytic pleocytosis","correct":true},{"text":"Neutrophilic pleocytosis","correct":false},{"text":"Hemorrhagic","correct":false},{"text":"Hemorrhagic and lymphocytic pleocytosis","correct":false},{"text":"No changes","correct":false}]},{"question":"For diagnosis of tick-born encephalitis used the following lab tests:","answers":[{"text":"Patch test","correct":true},{"text":"ELISA","correct":false},{"text":"PCR","correct":false},{"text":"Immunofluorescent","correct":false},{"text":"CSF","correct":false}]},{"question":"Specify the clinical form that does not occur in tick-borne encephalitis:","answers":[{"text":"Poliomyelitiс","correct":true},{"text":"Meningeal","correct":false},{"text":"Meningoencephalitic","correct":false},{"text":"Febrile","correct":false},{"text":"Bulbar","correct":false}]},{"question":"Indicate the main clinical sign of Japanese encephalitis:","answers":[{"text":"Meningoencephalitis","correct":true},{"text":"Meningitis","correct":false},{"text":"Bulbar disorder","correct":false},{"text":"Myelitis","correct":false},{"text":"Poliomyelitis","correct":false}]},{"question":"Specify the characteristic symptoms of tick-borne encephalitis:","answers":[{"text":"Sudden onset, fever, severe central nervous system damage","correct":true},{"text":"Long incubation period, lethargy, central nervous system disorder","correct":false},{"text":"Sudden onset, lethargy, apathy, headache","correct":false},{"text":"Gradual onset, fever, headache, sweating","correct":false},{"text":"Gradual onset, arthralgic syndrome, oculomotor disorders","correct":false}]},{"question":"Indicate the error: When collecting an anamnesis in a patient with suspected tick-borne encephalitis, the presence or absence of the following complaints is ascertained:","answers":[{"text":"Dysuric disorders","correct":true},{"text":"Headache","correct":false},{"text":"Fever","correct":false},{"text":"Nausea, vomiting","correct":false},{"text":"Intoxication","correct":false}]},{"question":"Specify how long an infected tick remains contagious:","answers":[{"text":"For life","correct":true},{"text":"A few days","correct":false},{"text":"A few weeks","correct":false},{"text":"From 1 to 3 months","correct":false},{"text":"1-2 years","correct":false}]},{"question":"The clinical picture of Japanese encephalitis is characterized by all of the following. Find the error:","answers":[{"text":"Mild disease","correct":true},{"text":"Acute onset","correct":false},{"text":"Incorrect nature of the temperature curve","correct":false},{"text":"Lesions of the central and peripheral nervous system","correct":false},{"text":"Changes in the cerebrospinal fluid","correct":false}]},{"question":"Specify a method for detecting tick-borne encephalitis virus in ticks","answers":[{"text":"PCR","correct":true},{"text":"Complement fixation","correct":false},{"text":"Immune blot","correct":false},{"text":"ELISA","correct":false},{"text":"Bacteriological method","correct":false}]},{"question":"Specify the most significant in the epidemiology of tick-borne encephalitis","answers":[{"text":"Staying in endemic regions during the season of tick activity","correct":true},{"text":"Contact with a sick person","correct":false},{"text":"Contact with farm animals","correct":false},{"text":"Living in the countryside","correct":false},{"text":"Use of meat products","correct":false}]},{"question":"Specify an error among the main clinical forms of tick-borne encephalitis","answers":[{"text":"Intestinal","correct":true},{"text":"Feverish","correct":false},{"text":"Meningeal","correct":false},{"text":"Meningoencephalitic","correct":false},{"text":"Polyradiculoneuritic","correct":false}]},{"question":"Indicate the known name of the plague","answers":[{"text":"Black death","correct":true},{"text":"Blue death","correct":false},{"text":"Yellow fever","correct":false},{"text":"Kala azar","correct":false},{"text":"Black fever","correct":false}]},{"question":"Indicate which of the following is the cause of plague?","answers":[{"text":"Yersinia pestis","correct":true},{"text":"Trichinella spiralis","correct":false},{"text":"Salmonella typhimurium","correct":false},{"text":"Leismania donovani","correct":false},{"text":"Coxiella burnetti","correct":false}]},{"question":"Estimate the degree of bubo tenderness in bubonic plague","answers":[{"text":"Sharply painful","correct":true},{"text":"Moderately painful","correct":false},{"text":"Periodically painful","correct":false},{"text":"Less painful","correct":false},{"text":"Painless","correct":false}]},{"question":"Indicate how long a person usually lived after infection before becoming ill?","answers":[{"text":"3-5 days","correct":true},{"text":"24 hours","correct":false},{"text":"10-12 days","correct":false},{"text":"20-24 days","correct":false},{"text":"1 month","correct":false}]},{"question":"The European population became infected with the plague in the following ways. Find error:","answers":[{"text":"Being bitten by infected mosquitoes","correct":true},{"text":"By touching everything worn by people who were infected","correct":false},{"text":"Being in the same room with someone was already infected","correct":false},{"text":"Being bitten by infected fleas","correct":false},{"text":"Slaughtering a sick camel","correct":false}]},{"question":"Specify the most contagious type of plague","answers":[{"text":"Pneumonic plague","correct":true},{"text":"Bubonic plague","correct":false},{"text":"Septicemic plague","correct":false},{"text":"Wild plague","correct":false},{"text":"Cutaneous plague","correct":false}]},{"question":"All the following are true regarding to plague. Finf error:","answers":[{"text":"Cases of bubonic plague are infectious","correct":true},{"text":"Xenopsylla cheopis is the main vector","correct":false},{"text":"Reservoir of the infection in wild rodents","correct":false},{"text":"Flea rates are not specific indicators of an impending epidemic","correct":false},{"text":"Caused by Yersinia pestis","correct":false}]},{"question":"Indicate the disease, which include the follow symptoms: bubo, fever, intoxication, infectious-toxic shock:","answers":[{"text":"Plague","correct":true},{"text":"Cholera","correct":false},{"text":"Tularemia","correct":false},{"text":"Anthrax","correct":false},{"text":"Yersiniosis","correct":false}]},{"question":"Select diseases with which differential diagnosis of pneumonic plague is carried out","answers":[{"text":"Tularemia, Acute purulent lymphadenitis, lobar pneumonia","correct":true},{"text":"Hydradenitis, Cholera, Pulmonary tuberculosis","correct":false},{"text":"Anthrax, Sepsis, Hemorrhagic fever","correct":false},{"text":"Rabies, Tetanus, Anthrax","correct":false},{"text":"Epidemic typhus, Botulism, Typhoid fever","correct":false}]},{"question":"Determine the most important sign of the septic form of plague","answers":[{"text":"Hemorrhagic septicemia","correct":true},{"text":"Absence of typical manifestations in the form of buboes or pneumonia","correct":false},{"text":"Presence of toxic lymphadenitis","correct":false},{"text":"Toxico - infectious shock","correct":false},{"text":"Water - electrolyte disorders","correct":false}]},{"question":"Select the drug of choice for the plague","answers":[{"text":"Streptomycin","correct":true},{"text":"Tetracycline","correct":false},{"text":"Chloramphenicol","correct":false},{"text":"Ampicillin","correct":false},{"text":"Ceftriaxon","correct":false}]},{"question":"Сomplete the sentence: The most common complications of bubonic plague is …","answers":[{"text":"Septicemia","correct":true},{"text":"Pneumonia","correct":false},{"text":"Meningitis","correct":false},{"text":"Phlegmon","correct":false},{"text":"Erysipelas","correct":false}]},{"question":"Specify at what disease the following anti-epidemic measures are applied: disinfection, chemoprophylaxis, vaccination?","answers":[{"text":"Plague","correct":true},{"text":"Infectious mononucleosis","correct":false},{"text":"Adenovirus infection","correct":false},{"text":"Brucellosis","correct":false},{"text":"Rabies","correct":false}]},{"question":"Determine, which form of plague is the most dangerous and life-threatening?","answers":[{"text":"Septicemic","correct":true},{"text":"Bubonic","correct":false},{"text":"Pneumonic","correct":false},{"text":"Cutaneous","correct":false},{"text":"Gastrointestinal","correct":false}]}]; // Pre-filled data', dataInjection);
+
+            // 2. Modify styles to hide landing page and show quiz app immediately
+            htmlContent = htmlContent.replace('<div id="landing-page">', '<div id="landing-page" style="display:none !important">');
+            htmlContent = htmlContent.replace('<div id="quiz-app">', '<div id="quiz-app" style="display:block !important">');
+            
+            // 3. Add auto-start script at the end of body
+            const autoStartScript = `
+            <script>
+                document.addEventListener('DOMContentLoaded', () => {
+                     // Auto-initialize since we have data
+                     if(questions.length > 0) {
+                        totalQuestions = questions.length;
+                        selectedQuestionCount = questions.length;
+                        initializeQuiz();
+                        document.getElementById('questionCountInput').value = totalQuestions;
+                        document.getElementById('questionCountInput').max = totalQuestions;
+                        document.getElementById('totalQuestionsLabel').textContent = '/ ' + totalQuestions;
+                        document.getElementById('countDisplayText').textContent = totalQuestions + ' / ' + totalQuestions;
+                     }
+                });
+            <\/script>`;
+            
+            htmlContent = htmlContent.replace('
+            <script>
+                document.addEventListener('DOMContentLoaded', () => {
+                     // Auto-initialize since we have data
+                     if(questions.length > 0) {
+                        totalQuestions = questions.length;
+                        selectedQuestionCount = questions.length;
+                        initializeQuiz();
+                        document.getElementById('questionCountInput').value = totalQuestions;
+                        document.getElementById('questionCountInput').max = totalQuestions;
+                        document.getElementById('totalQuestionsLabel').textContent = '/ ' + totalQuestions;
+                        document.getElementById('countDisplayText').textContent = totalQuestions + ' / ' + totalQuestions;
+                     }
+                });
+            </script></body>', autoStartScript + '</body>');
+
+            // Create download blob
+            const blob = new Blob([htmlContent], {type: 'text/html'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'my_quiz.html';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function showError(msg) {
+            errorMsg.textContent = msg;
+            errorMsg.style.display = 'block';
+            loader.style.display = 'none';
+            dropZone.style.display = 'block';
+        }
+
+        function parseExcelData(data) {
+            // Flexible column matching similar to Python script
+            if (data.length === 0) return [];
+            
+            const firstRow = data[0];
+            const keys = Object.keys(firstRow);
+            
+            let colMap = {};
+            
+            keys.forEach(key => {
+                const lowerKey = key.toLowerCase().trim();
+                if (lowerKey.includes('question')) colMap['Question'] = key;
+                else if (lowerKey.includes('option1') || lowerKey === 'option 1') colMap['Option1'] = key;
+                else if (lowerKey.includes('option2') || lowerKey === 'option 2') colMap['Option2'] = key;
+                else if (lowerKey.includes('option3') || lowerKey === 'option 3') colMap['Option3'] = key;
+                else if (lowerKey.includes('option4') || lowerKey === 'option 4') colMap['Option4'] = key;
+                else if (lowerKey.includes('option5') || lowerKey === 'option 5') colMap['Option5'] = key;
+            });
+
+            if (!colMap['Question'] || !colMap['Option1'] || !colMap['Option2']) {
+                throw new Error("Excel must contain 'Question', 'Option1', and 'Option2' columns.");
+            }
+
+            const validQuestions = [];
+
+            data.forEach(row => {
+                const qText = String(row[colMap['Question']] || "").trim();
+                if (qText && qText.toLowerCase() !== 'nan' && qText.length > 5) {
+                    const options = [];
+                    // Check options 1-5
+                    for (let i = 1; i <= 5; i++) {
+                        const key = colMap[`Option${i}`];
+                        if (key && row[key]) {
+                            const optVal = String(row[key]).trim();
+                            if (optVal && optVal.toLowerCase() !== 'nan') {
+                                options.push({
+                                    text: optVal,
+                                    correct: (i === 1) // First option is correct in input
+                                });
+                            }
+                        }
+                    }
+
+                    if (options.length >= 2) {
+                        validQuestions.push({
+                            question: qText,
+                            answers: options
+                        });
+                    }
+                }
+            });
+
+            return validQuestions;
+        }
+
+
+        /* --- QUIZ APPLICATION LOGIC (Adapted from Python Script) --- */
+        let questions = []; // Will be populated by file upload
+
+        // Quiz state
+        let currentQuestionIndex = 0;
+        let userAnswers = [];
+        let isExamMode = false;
+        let isDarkMode = false;
+        let isAnswerMode = false;
+        let isQuestionShuffleMode = false; 
+        let isQuestionShuffleEnabled = false; 
+        let timerInterval = null;
+        let timerActive = false;
+        let timerExpired = false;
+        let totalQuestions = 0;
+        let selectedQuestionCount = 0;
+        let examGridExpanded = true;
+        let originalQuestionOrder = []; 
+        let shuffledQuestionOrder = []; 
+        let currentQuestionOrder = []; 
+
+        function shuffleArray(array) {
+            const shuffled = [...array];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            return shuffled;
+        }
+
+        function shuffleQuestionOptions(question) {
+            const shuffledAnswers = shuffleArray(question.answers);
+            return {
+                ...question,
+                answers: shuffledAnswers
+            };
+        }
+
+        function initializeQuiz() {
+            originalQuestionOrder = Array.from({length: questions.length}, (_, i) => i);
+            shuffledQuestionOrder = shuffleArray(originalQuestionOrder);
+            currentQuestionOrder = [...originalQuestionOrder];
+            
+            userAnswers = new Array(questions.length).fill(null);
+            loadQuestion();
+            createQuestionGrid();
+            createMobileQuestionGrid();
+            createExamQuestionGrid();
+            updateNavigationButtons();
+        }
+
+        function loadQuestion() {
+            if (questions.length === 0) return;
+            
+            const questionIndex = currentQuestionOrder[currentQuestionIndex];
+            const originalQuestion = questions[questionIndex];
+            
+            const question = shuffleQuestionOptions(originalQuestion);
+            
+            document.getElementById('questionNumber').textContent = `Question ${currentQuestionIndex + 1}`;
+            document.getElementById('questionCounter').textContent = `${currentQuestionIndex + 1} / ${selectedQuestionCount}`;
+            document.getElementById('questionText').textContent = question.question;
+
+            const answersContainer = document.getElementById('answersContainer');
+            answersContainer.innerHTML = '';
+
+            question.answers.forEach((answer, index) => {
+                const answerDiv = document.createElement('div');
+                answerDiv.className = 'answer-option';
+                answerDiv.onclick = () => selectAnswer(index, answer.correct);
+
+                const optionLabel = document.createElement('div');
+                optionLabel.className = 'option-label';
+                optionLabel.textContent = String.fromCharCode(65 + index); 
+
+                const optionText = document.createElement('div');
+                optionText.className = 'option-text';
+                optionText.textContent = answer.text;
+
+                answerDiv.appendChild(optionLabel);
+                answerDiv.appendChild(optionText);
+                answersContainer.appendChild(answerDiv);
+
+                if (userAnswers[questionIndex] !== null && userAnswers[questionIndex].selectedIndex === index) {
+                    answerDiv.classList.add('selected');
+                }
+
+                if (isAnswerMode && !isExamMode) {
+                    if (answer.correct) {
+                        answerDiv.classList.add('correct-answer-mode');
+                    } else {
+                        answerDiv.classList.add('other-answer-mode');
+                    }
+                }
+
+                if (timerExpired) {
+                    answerDiv.classList.add('timer-expired');
+                }
+            });
+
+            updateQuestionGrid();
+            updateMobileQuestionGrid();
+            updateExamQuestionGrid();
+        }
+
+        function selectAnswer(answerIndex, isCorrect) {
+            if (timerExpired) return;
+
+            const questionIndex = currentQuestionOrder[currentQuestionIndex];
+            const answerOptions = document.querySelectorAll('.answer-option');
+            
+            if (isExamMode) {
+                answerOptions.forEach(option => option.classList.remove('selected'));
+            }
+
+            userAnswers[questionIndex] = {
+                selectedIndex: answerIndex,
+                isCorrect: isCorrect
+            };
+
+            answerOptions[answerIndex].classList.add('selected');
+
+            if (!isExamMode) {
+                const originalQuestion = questions[questionIndex];
+                answerOptions.forEach((option, index) => {
+                    option.classList.remove('correct', 'incorrect');
+                    const currentAnswers = Array.from(document.querySelectorAll('.option-text')).map(el => el.textContent);
+                    const correctAnswerText = originalQuestion.answers.find(a => a.correct).text;
+                    const correctIndex = currentAnswers.indexOf(correctAnswerText);
+                    
+                    if (index === correctIndex) {
+                        option.classList.add('correct');
+                    } else if (index === answerIndex) {
+                        option.classList.add('incorrect');
+                    }
+                    option.classList.add('disabled');
+                });
+            }
+
+            updateQuestionGrid();
+            updateMobileQuestionGrid();
+            updateExamQuestionGrid();
+            updateNavigationButtons();
+        }
+
+        function nextQuestion() {
+            if (currentQuestionIndex < selectedQuestionCount - 1) {
+                currentQuestionIndex++;
+                loadQuestion();
+                updateNavigationButtons();
+            }
+        }
+
+        function previousQuestion() {
+            if (currentQuestionIndex > 0) {
+                currentQuestionIndex--;
+                loadQuestion();
+                updateNavigationButtons();
+            }
+        }
+
+        function jumpToQuestion(questionIndex) {
+            if (questionIndex < selectedQuestionCount) {
+                currentQuestionIndex = questionIndex;
+                loadQuestion();
+                updateNavigationButtons();
+            }
+        }
+
+        function jumpToQuestionNumber() {
+            const input = document.getElementById('jumpInput');
+            const questionNumber = parseInt(input.value);
+            
+            if (questionNumber >= 1 && questionNumber <= selectedQuestionCount) {
+                jumpToQuestion(questionNumber - 1);
+                input.value = '';
+            } else {
+                alert(`Please enter a number between 1 and ${selectedQuestionCount}`);
+            }
+        }
+
+        function updateNavigationButtons() {
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+            const finishBtn = document.getElementById('finishBtn');
+            const submitBtn = document.getElementById('submitBtn');
+
+            prevBtn.disabled = currentQuestionIndex === 0;
+            
+            if (currentQuestionIndex === selectedQuestionCount - 1) {
+                nextBtn.style.display = 'none';
+                if (isExamMode) {
+                    submitBtn.style.display = 'inline-block';
+                    finishBtn.style.display = 'none';
+                } else {
+                    finishBtn.style.display = 'inline-block';
+                    submitBtn.style.display = 'none';
+                }
+            } else {
+                nextBtn.style.display = 'inline-block';
+                finishBtn.style.display = 'none';
+                submitBtn.style.display = 'none';
+            }
+
+            if (isExamMode && currentQuestionIndex < selectedQuestionCount - 1) {
+                submitBtn.style.display = 'inline-block';
+            }
+        }
+
+        function createQuestionGrid() {
+            const grid = document.getElementById('questionGrid');
+            grid.innerHTML = '';
+            for (let i = 0; i < selectedQuestionCount; i++) {
+                const gridItem = document.createElement('div');
+                gridItem.className = 'grid-item';
+                gridItem.textContent = i + 1;
+                gridItem.onclick = () => jumpToQuestion(i);
+                grid.appendChild(gridItem);
+            }
+        }
+
+        function createMobileQuestionGrid() {
+            const grid = document.getElementById('mobileQuestionGrid');
+            grid.innerHTML = '';
+            for (let i = 0; i < selectedQuestionCount; i++) {
+                const gridItem = document.createElement('div');
+                gridItem.className = 'grid-item';
+                gridItem.textContent = i + 1;
+                gridItem.onclick = () => jumpToQuestion(i);
+                grid.appendChild(gridItem);
+            }
+        }
+
+        function createExamQuestionGrid() {
+            const grid = document.getElementById('examGridContainer');
+            grid.innerHTML = '';
+            for (let i = 0; i < selectedQuestionCount; i++) {
+                const gridItem = document.createElement('div');
+                gridItem.className = 'exam-grid-item';
+                gridItem.textContent = i + 1;
+                gridItem.onclick = () => jumpToQuestion(i);
+                grid.appendChild(gridItem);
+            }
+        }
+
+        function updateQuestionGrid() {
+            const gridItems = document.querySelectorAll('#questionGrid .grid-item');
+            gridItems.forEach((item, index) => {
+                item.classList.remove('current', 'answered', 'unanswered', 'correct', 'incorrect');
+                const questionIndex = currentQuestionOrder[index];
+                if (index === currentQuestionIndex) {
+                    item.classList.add('current');
+                } else if (userAnswers[questionIndex] !== null) {
+                    if (isExamMode) {
+                        item.classList.add('answered');
+                    } else {
+                        if (userAnswers[questionIndex].isCorrect) {
+                            item.classList.add('correct');
+                        } else {
+                            item.classList.add('incorrect');
+                        }
+                    }
+                } else {
+                    item.classList.add('unanswered');
+                }
+            });
+        }
+
+        function updateMobileQuestionGrid() {
+            const gridItems = document.querySelectorAll('#mobileQuestionGrid .grid-item');
+            gridItems.forEach((item, index) => {
+                item.classList.remove('current', 'answered', 'unanswered', 'correct', 'incorrect');
+                const questionIndex = currentQuestionOrder[index];
+                if (index === currentQuestionIndex) {
+                    item.classList.add('current');
+                } else if (userAnswers[questionIndex] !== null) {
+                    if (isExamMode) {
+                        item.classList.add('answered');
+                    } else {
+                        if (userAnswers[questionIndex].isCorrect) {
+                            item.classList.add('correct');
+                        } else {
+                            item.classList.add('incorrect');
+                        }
+                    }
+                } else {
+                    item.classList.add('unanswered');
+                }
+            });
+        }
+
+        function updateExamQuestionGrid() {
+            const gridItems = document.querySelectorAll('#examGridContainer .exam-grid-item');
+            gridItems.forEach((item, index) => {
+                item.classList.remove('current', 'answered', 'unanswered');
+                const questionIndex = currentQuestionOrder[index];
+                if (index === currentQuestionIndex) {
+                    item.classList.add('current');
+                } else if (userAnswers[questionIndex] !== null) {
+                    item.classList.add('answered');
+                } else {
+                    item.classList.add('unanswered');
+                }
+            });
+        }
+
+        function toggleMobileDropdown() {
+            const content = document.getElementById('dropdownContent');
+            const arrow = document.getElementById('dropdownArrow');
+            content.classList.toggle('expanded');
+            arrow.classList.toggle('expanded');
+        }
+
+        function toggleExamGrid() {
+            const container = document.getElementById('examGridContainer');
+            const toggle = document.getElementById('examGridToggle');
+            examGridExpanded = !examGridExpanded;
+            if (examGridExpanded) {
+                container.classList.remove('collapsed');
+                toggle.textContent = 'Collapse';
+            } else {
+                container.classList.add('collapsed');
+                toggle.textContent = 'Expand';
+            }
+        }
+
+        function toggleDarkMode() {
+            isDarkMode = !isDarkMode;
+            const btn = document.getElementById('darkModeBtn');
+            if (isDarkMode) {
+                document.body.classList.add('dark-mode');
+                btn.classList.add('active');
+                btn.textContent = '☀️ Light Mode';
+            } else {
+                document.body.classList.remove('dark-mode');
+                btn.classList.remove('active');
+                btn.textContent = '🌙 Dark Mode';
+            }
+        }
+
+        function toggleAnswerMode() {
+            isAnswerMode = !isAnswerMode;
+            const btn = document.getElementById('answerModeBtn');
+            if (isAnswerMode) {
+                btn.classList.add('active');
+                btn.textContent = '🔒 Hide Answers';
+            } else {
+                btn.classList.remove('active');
+                btn.textContent = '💡 Answer Mode';
+            }
+            loadQuestion();
+        }
+
+        function toggleQuestionShuffleMode() {
+            isQuestionShuffleMode = !isQuestionShuffleMode;
+            const btn = document.getElementById('questionShuffleModeBtn');
+            if (isQuestionShuffleMode) {
+                btn.classList.add('active');
+                btn.textContent = '🔀 Shuffle: ON';
+                currentQuestionOrder = [...shuffledQuestionOrder];
+            } else {
+                btn.classList.remove('active');
+                btn.textContent = '🔀 Shuffle Questions';
+                currentQuestionOrder = [...originalQuestionOrder];
+            }
+            currentQuestionIndex = 0;
+            loadQuestion();
+            createQuestionGrid();
+            createMobileQuestionGrid();
+            updateNavigationButtons();
+        }
+
+        function toggleQuestionShuffle() {
+            isQuestionShuffleEnabled = !isQuestionShuffleEnabled;
+            const btn = document.getElementById('shuffleToggleBtn');
+            const settings = document.querySelector('.question-shuffle-settings');
+            const display = document.getElementById('questionShuffleDisplay');
+            const displayText = document.getElementById('shuffleDisplayText');
+            const resetBtn = document.getElementById('shuffleResetBtn');
+            
+            if (isQuestionShuffleEnabled) {
+                btn.classList.add('active');
+                btn.textContent = 'Enabled';
+                settings.classList.add('hidden');
+                display.classList.add('active');
+                displayText.textContent = 'Shuffle: ON';
+                resetBtn.classList.add('visible');
+                currentQuestionOrder = [...shuffledQuestionOrder];
+            } else {
+                btn.classList.remove('active');
+                btn.textContent = 'Enable';
+                settings.classList.remove('hidden');
+                display.classList.remove('active');
+                displayText.textContent = 'Shuffle: Off';
+                resetBtn.classList.remove('visible');
+                currentQuestionOrder = [...originalQuestionOrder];
+            }
+            currentQuestionIndex = 0;
+            loadQuestion();
+            createExamQuestionGrid();
+            updateNavigationButtons();
+        }
+
+        function resetQuestionShuffle() {
+            isQuestionShuffleEnabled = false;
+            const btn = document.getElementById('shuffleToggleBtn');
+            const settings = document.querySelector('.question-shuffle-settings');
+            const display = document.getElementById('questionShuffleDisplay');
+            const displayText = document.getElementById('shuffleDisplayText');
+            const resetBtn = document.getElementById('shuffleResetBtn');
+            
+            btn.classList.remove('active');
+            btn.textContent = 'Enable';
+            settings.classList.remove('hidden');
+            display.classList.remove('active');
+            displayText.textContent = 'Shuffle: Off';
+            resetBtn.classList.remove('visible');
+            
+            currentQuestionOrder = [...originalQuestionOrder];
+            currentQuestionIndex = 0;
+            loadQuestion();
+            createExamQuestionGrid();
+            updateNavigationButtons();
+        }
+
+        function toggleExamMode() {
+            isExamMode = !isExamMode;
+            const btn = document.getElementById('examModeBtn');
+            const exitBtn = document.getElementById('exitBtnText');
+            const title = document.querySelector('.title');
+            
+            if (isExamMode) {
+                document.body.classList.add('exam-mode');
+                btn.classList.add('active');
+                btn.textContent = '📝 Exit Exam Mode';
+                exitBtn.textContent = 'Exit Exam Mode';
+                title.textContent = 'EXAM MODE';
+                
+                userAnswers = new Array(questions.length).fill(null);
+                currentQuestionIndex = 0;
+                loadQuestion();
+                updateNavigationButtons();
+            } else {
+                document.body.classList.remove('exam-mode');
+                btn.classList.remove('active');
+                btn.textContent = '🎓 Simulate Exam Mode';
+                exitBtn.textContent = 'Exit';
+                title.textContent = 'Enhanced Quiz Application';
+                loadQuestion(); 
+            }
+        }
+
+        function setQuestionCount() {
+            const input = document.getElementById('questionCountInput');
+            const newCount = parseInt(input.value) || questions.length;
+            
+            if (newCount < 1 || newCount > questions.length) {
+                alert(`Please enter a number between 1 and ${questions.length}`);
+                input.value = selectedQuestionCount;
+                return;
+            }
+            
+            selectedQuestionCount = newCount;
+            
+            const settings = document.querySelector('.question-count-settings');
+            const display = document.getElementById('questionCountDisplay');
+            const displayText = document.getElementById('countDisplayText');
+            const resetBtn = document.getElementById('countResetDisplayBtn');
+            
+            settings.classList.add('hidden');
+            displayText.textContent = `${selectedQuestionCount} / ${questions.length}`;
+            resetBtn.classList.add('visible');
+            
+            userAnswers = new Array(questions.length).fill(null);
+            currentQuestionIndex = 0;
+            
+            document.getElementById('questionCounter').textContent = `1 / ${selectedQuestionCount}`;
+            document.getElementById('jumpInput').max = selectedQuestionCount;
+            createQuestionGrid();
+            createMobileQuestionGrid();
+            createExamQuestionGrid();
+            loadQuestion();
+            updateNavigationButtons();
+        }
+
+        function resetQuestionCount() {
+            selectedQuestionCount = questions.length;
+            
+            const settings = document.querySelector('.question-count-settings');
+            const display = document.getElementById('questionCountDisplay');
+            const displayText = document.getElementById('countDisplayText');
+            const resetBtn = document.getElementById('countResetDisplayBtn');
+            const input = document.getElementById('questionCountInput');
+            
+            settings.classList.remove('hidden');
+            displayText.textContent = `${questions.length} / ${questions.length}`;
+            resetBtn.classList.remove('visible');
+            input.value = questions.length;
+            
+            userAnswers = new Array(questions.length).fill(null);
+            currentQuestionIndex = 0;
+            
+            document.getElementById('questionCounter').textContent = `1 / ${selectedQuestionCount}`;
+            document.getElementById('jumpInput').max = selectedQuestionCount;
+            createQuestionGrid();
+            createMobileQuestionGrid();
+            createExamQuestionGrid();
+            loadQuestion();
+            updateNavigationButtons();
+        }
+
+        function startTimer() {
+            const minutes = parseInt(document.getElementById('minutesInput').value) || 0;
+            const seconds = parseInt(document.getElementById('secondsInput').value) || 0;
+            const totalSeconds = minutes * 60 + seconds;
+
+            if (totalSeconds <= 0) {
+                alert('Please set a valid time');
+                return;
+            }
+
+            timerActive = true;
+            timerExpired = false;
+            let remainingTime = totalSeconds;
+
+            const timer = document.getElementById('timer');
+            const timerDisplay = document.getElementById('timerDisplay');
+            const timerResetBtn = document.getElementById('timerResetBtn');
+            const timerSettings = document.querySelector('.timer-settings');
+
+            timer.classList.add('active');
+            timerResetBtn.classList.add('visible');
+            timerSettings.classList.add('hidden');
+
+            timerInterval = setInterval(() => {
+                const minutes = Math.floor(remainingTime / 60);
+                const seconds = remainingTime % 60;
+                timerDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+                if (remainingTime <= 0) {
+                    clearInterval(timerInterval);
+                    timerExpired = true;
+                    timerActive = false;
+                    timer.classList.remove('active');
+                    timerDisplay.textContent = 'Time expired!';
+                    
+                    document.getElementById('timerExpiredOverlay').classList.add('visible');
+                    document.getElementById('quizSection').classList.add('timer-expired');
+                    
+                    setTimeout(() => {
+                        finishQuiz();
+                    }, 3000);
+                }
+
+                remainingTime--;
+            }, 1000);
+        }
+
+        function resetTimer() {
+            clearInterval(timerInterval);
+            timerActive = false;
+            timerExpired = false;
+
+            const timer = document.getElementById('timer');
+            const timerDisplay = document.getElementById('timerDisplay');
+            const timerResetBtn = document.getElementById('timerResetBtn');
+            const timerSettings = document.querySelector('.timer-settings');
+
+            timer.classList.remove('active');
+            timerResetBtn.classList.remove('visible');
+            timerSettings.classList.remove('hidden');
+            timerDisplay.textContent = 'No timer set';
+
+            document.getElementById('timerExpiredOverlay').classList.remove('visible');
+            document.getElementById('quizSection').classList.remove('timer-expired');
+
+            loadQuestion(); 
+        }
+
+        function hideTimerExpiredOverlay() {
+            document.getElementById('timerExpiredOverlay').classList.remove('visible');
+        }
+
+        function finishQuiz() {
+            const answeredQuestions = userAnswers.slice(0, selectedQuestionCount).filter(answer => answer !== null).length;
+            const correctAnswers = userAnswers.slice(0, selectedQuestionCount).reduce((count, answer, index) => {
+                if (answer !== null && answer.isCorrect) {
+                    return count + 1;
+                }
+                return count;
+            }, 0);
+
+            const percentage = Math.round((correctAnswers / selectedQuestionCount) * 100);
+            const passed = percentage >= 60;
+
+            if (isExamMode) {
+                const resultOverlay = document.getElementById('resultOverlay');
+                const resultMessage = document.getElementById('resultMessage');
+                const resultTitle = document.getElementById('resultTitle');
+                const resultStats = document.getElementById('resultStats');
+
+                resultTitle.textContent = passed ? '🎉 PASSED!' : '❌ FAILED';
+                resultTitle.className = `result-title ${passed ? 'passed' : 'failed'}`;
+                resultMessage.className = `result-message ${passed ? 'passed' : 'failed'}`;
+
+                resultStats.innerHTML = `
+                    <strong>Questions Answered:</strong> ${answeredQuestions} / ${selectedQuestionCount}<br>
+                    <strong>Correct Answers:</strong> ${correctAnswers} / ${selectedQuestionCount}<br>
+                    <strong>Percentage:</strong> ${percentage}%<br><br>
+                    <em>${passed ? 'Congratulations! You passed the exam.' : 'You need 60% to pass. Better luck next time!'}</em>
+                `;
+
+                resultOverlay.classList.add('visible');
+            } else {
+                let message = `Quiz Completed!\n\n`;
+                message += `Questions Answered: ${answeredQuestions} / ${selectedQuestionCount}\n`;
+                message += `Correct Answers: ${correctAnswers} / ${selectedQuestionCount}\n`;
+                message += `Percentage: ${percentage}%`;
+                alert(message);
+            }
+        }
+
+        function hideResultOverlay() {
+            document.getElementById('resultOverlay').classList.remove('visible');
+        }
+
+        function exitQuiz() {
+            if (confirm('Are you sure you want to return to the upload screen? Current progress will be lost.')) {
+                location.reload();
+            }
+        }
+    </script>
+
+
+
+</body></html>
